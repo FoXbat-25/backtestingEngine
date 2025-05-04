@@ -1,4 +1,4 @@
-from backtest import fetch_nse_data, daily_returns
+from backtestingEngine.app.backtest_XX import fetch_nse_data, daily_returns
 
 def main():
 

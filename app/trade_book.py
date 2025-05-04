@@ -2,10 +2,7 @@ from config import SQL_POSTGRES_CONN
 
 import psycopg2
 import pandas as pd 
-import numpy as np
-from datetime import datetime, timedelta
-
-from utils import utils
+from datetime import datetime
 
 with psycopg2.connect(SQL_POSTGRES_CONN) as conn:
     with conn.cursor() as cursor:
@@ -13,14 +10,14 @@ with psycopg2.connect(SQL_POSTGRES_CONN) as conn:
         def trade_book(df, strategy):
             
             entry_insert_query = f"""
-                INSERT INTO TRADE_BOOK (symbol, entry_date, entry_price, status, strategy, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO TRADE_BOOK (symbol, entry_date, entry_price, status, strategy, created_at, updated_at, stop_loss)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (symbol, entry_date)
                 DO NOTHING
             """
             exit_insert_query = f"""
                 UPDATE TRADE_BOOK
-                SET exit_date = %s, exit_price = %s, updated_at = %s, status = 'closed'
+                SET exit_date = %s, exit_price = %s, updated_at = %s,  status = 'closed'
                 WHERE symbol = %s AND status = 'open'
             """
             stop_loss_exit_query = f"""
@@ -53,6 +50,11 @@ with psycopg2.connect(SQL_POSTGRES_CONN) as conn:
                     
                         if open_positions is None and row ['Strong_Buy'] == 1 and cooldown_end_date is None:
                             
+                            open_positions = (row['next_open'])
+                            entry_atr = (row['ATR'])
+
+                            stop_loss = (open_positions - (1.5*entry_atr))
+
                             now_timestamp = datetime.now()
 
                             entry_trade_data = [row['symbol'],
@@ -61,11 +63,12 @@ with psycopg2.connect(SQL_POSTGRES_CONN) as conn:
                                         'open', 
                                         strategy, 
                                         now_timestamp, 
-                                        now_timestamp ]
+                                        now_timestamp,
+                                        stop_loss]
                             
                             cursor.execute(entry_insert_query, tuple(entry_trade_data))
-                            open_positions = (row['next_open'])
-                            entry_atr = (row['ATR'])
+                            
+                            
 
                         elif open_positions is not None and row ['Strong_Sell'] == 1:
                             now_timestamp = datetime.now()
@@ -79,12 +82,8 @@ with psycopg2.connect(SQL_POSTGRES_CONN) as conn:
                             open_positions = None
                             entry_atr = None
                         
-                        elif open_positions is not None and (
-                                            
-                            (row['close'] <= (open_positions - (1.5*entry_atr)))
+                        elif open_positions is not None and (row['close'] <= stop_loss):
                 
-                            ):
-
                             now_timestamp = datetime.now()
                             stop_loss_exit_data = [row['next_date'],
                                             row['next_open'],
@@ -99,4 +98,5 @@ with psycopg2.connect(SQL_POSTGRES_CONN) as conn:
                         
         
     conn.commit()
+    
 

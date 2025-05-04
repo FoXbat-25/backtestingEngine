@@ -10,9 +10,9 @@ from trade_book_copy import trade_book
 
 engine = create_engine(SQL_ALCHEMY_CONN)
 
-def fetch_nse_data(symbol, start_date='2024-01-01', end_date = datetime.today().date()):
-    
-        query = """
+def daily_returns(symbol, start_date='2024-01-01', plot=True):
+
+    query = """
             SELECT f.SYMBOL, f.DATE, f.OPEN, f.HIGH, f.LOW, f.CLOSE, f.VOLUME
             FROM NSEDATA_FACT f
             INNER JOIN METADATA m ON f.SYMBOL = m.SYMBOL 
@@ -21,19 +21,15 @@ def fetch_nse_data(symbol, start_date='2024-01-01', end_date = datetime.today().
             AND symbol = %(symbol)s;
         """
 
-        dataframe = pd.read_sql(query, engine, params={"start_date": start_date, "end_date": end_date, "symbol": symbol})
+    df = pd.read_sql(query, engine, params={"start_date": start_date, "symbol": symbol})
 
-        dataframe['date'] = pd.to_datetime(dataframe['date'])
-        dataframe = dataframe.sort_values(by=['symbol', 'date'], ascending=[True, True])
+    df['date'] = pd.to_datetime(df['date'])
+    df = df.sort_values(by=['symbol', 'date'], ascending=[True, True])
 
-        dataframe['next_open'] = dataframe['open'].shift(-1)
-        dataframe['next_date'] = dataframe['date'].shift(-1)
-        dataframe['prev_date'] = dataframe['date'].shift(1)
-        dataframe['prev_close'] = dataframe['close'].shift(1)
-
-        return dataframe
-
-def daily_returns(df, plot=True):
+    df['next_open'] = df['open'].shift(-1)
+    df['next_date'] = df['date'].shift(-1)
+    df['prev_date'] = df['date'].shift(1)
+    df['prev_close'] = df['close'].shift(1)
 
     df['daily_return'] = df['close'] - df['prev_close']
     df['daily_return%'] = (df['daily_return']/df['prev_close'])*100
@@ -43,6 +39,8 @@ def daily_returns(df, plot=True):
 
     std_dev_daily_return = df['daily_return'].dropna().std()
     annual_std_dev = std_dev_daily_return * np.sqrt(250)
+
+    buy_and_hold_return=(df[df['date'] == df['date'].max()]['close'].values[0]) - (df[df['date'] == start_date]['close'].values[0])
 
     if plot:
         
@@ -70,4 +68,4 @@ def daily_returns(df, plot=True):
         plt.tight_layout()
         plt.show()
 
-    return mean_daily_return, annual_return, std_dev_daily_return, annual_std_dev
+    return mean_daily_return, annual_return, std_dev_daily_return, annual_std_dev, buy_and_hold_return
