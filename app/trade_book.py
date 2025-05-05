@@ -4,10 +4,9 @@ import psycopg2
 import pandas as pd 
 from datetime import datetime
 
-with psycopg2.connect(SQL_POSTGRES_CONN) as conn:
-    with conn.cursor() as cursor:
-
-        def trade_book(df, strategy):
+def trade_book(df, strategy):
+    with psycopg2.connect(SQL_POSTGRES_CONN) as conn:
+        with conn.cursor() as cursor:
             
             entry_insert_query = f"""
                 INSERT INTO TRADE_BOOK (symbol, entry_date, entry_price, status, strategy, created_at, updated_at, stop_loss)
@@ -97,6 +96,6 @@ with psycopg2.connect(SQL_POSTGRES_CONN) as conn:
                             cooldown_end_date = row['cooldown_end_date']
                         
         
-    conn.commit()
+        conn.commit()
     
 

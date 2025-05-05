@@ -1,10 +1,17 @@
+import sys
+import os
+
+# Add the parent directory (where meanReversion lives) to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine
 
+
+
 from datetime import datetime
 import matplotlib as plt
-from meanReversion.app.mean_reversion import mean_reversion
 from trade_book import trade_book
 
 from config import SQL_ALCHEMY_CONN
@@ -31,7 +38,7 @@ def fetch_data(symbol, start_date='2024-01-01', end_date = datetime.today().date
             INNER JOIN METADATA m ON f.SYMBOL = m.SYMBOL 
             WHERE m.LISTING_DATE <= CURRENT_DATE - INTERVAL '65 days'
             AND f.DATE BETWEEN %(start_date)s AND %(end_date)s
-            AND symbol = %(symbol)s;
+            AND f.symbol = %(symbol)s;
         """
 
     df = pd.read_sql(query, engine, params={"start_date": start_date, "symbol": symbol, "end_date": end_date})
@@ -60,6 +67,7 @@ def daily_returns(df, plot = False):
     annual_std_dev = std_dev_daily_return * np.sqrt(250)
 
     buy_and_hold_return=(df[df['date'] >= start_date]['close'].iloc[0]) - (df['close'].iloc[-1])
+    buy_and_hold_return_pct = (buy_and_hold_return/(df['close'].iloc[-1]))*100
 
     if plot:
         
@@ -92,7 +100,8 @@ def daily_returns(df, plot = False):
         "annual return": annual_return,
         "std_dev_daily_return": std_dev_daily_return,
         "annual_std_dev": annual_std_dev,
-        "buy_and_hold_return": buy_and_hold_return
+        "buy_and_hold_return": buy_and_hold_return,
+        "buy_and_hold_return_pct": buy_and_hold_return_pct
     }
 
 def indexes_return(first_trade_date, last_trade_date, symbol = "^NSEI"):
