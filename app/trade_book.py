@@ -25,10 +25,7 @@ def trade_book(df, strategy):
                 WHERE symbol = %s AND status = 'open'
             """
 
-            latest_trade_date = df['prev_date'].max()
-
-            df['cooldown_end_date'] = pd.to_datetime(df['cooldown_end_date'])
-                
+            latest_trade_date = df['prev_date'].max()              
             
             data = df[df['date']<=latest_trade_date]
 
@@ -49,7 +46,7 @@ def trade_book(df, strategy):
                     
                         if open_positions is None and row ['Strong_Buy'] == 1 and cooldown_end_date is None:
                             
-                            open_positions = (row['next_open'])
+                            open_positions = row['next_open']
                             entry_atr = (row['ATR'])
 
                             stop_loss = (open_positions - (1.5*entry_atr))
@@ -69,7 +66,7 @@ def trade_book(df, strategy):
                             
                             
 
-                        elif open_positions is not None and row ['Strong_Sell'] == 1:
+                        elif open_positions is not None and row ['Strong_Sell'] == 1 and row['next_date'] >= pd.to_datetime(open_positions):
                             now_timestamp = datetime.now()
 
                             exit_trade_data = [row['next_date'],
@@ -81,7 +78,7 @@ def trade_book(df, strategy):
                             open_positions = None
                             entry_atr = None
                         
-                        elif open_positions is not None and (row['close'] <= stop_loss):
+                        elif open_positions is not None and (row['close'] <= stop_loss) and row['next_date'] >= pd.to_datetime(open_positions):
                 
                             now_timestamp = datetime.now()
                             stop_loss_exit_data = [row['next_date'],

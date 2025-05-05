@@ -30,7 +30,16 @@ class backTester:
         df = self.strategy_func()
         trade_book(df,strategy=self.strategy_name)
 
-def fetch_data(symbol, start_date='2024-01-01', end_date = datetime.today().date()):
+def fetch_symbols():
+
+    query="""
+        SELECT DISTINCT SYMBOL FROM TRADE_BOOK;
+    """
+    df = pd.read_sql(query, engine)
+    df = df.sort_values(by=['symbol'], ascending=[True])
+    return df
+
+def fetch_data(symbol, start_date='2023-01-01', end_date = datetime.today().date()):
 
     query = """
             SELECT f.SYMBOL, f.DATE, f.OPEN, f.HIGH, f.LOW, f.CLOSE, f.VOLUME
@@ -42,6 +51,8 @@ def fetch_data(symbol, start_date='2024-01-01', end_date = datetime.today().date
         """
 
     df = pd.read_sql(query, engine, params={"start_date": start_date, "symbol": symbol, "end_date": end_date})
+    if df.empty:
+            return {"error": "No closed trades found for this symbol/strategy"}
 
     df['date'] = pd.to_datetime(df['date'])
     df = df.sort_values(by=['symbol', 'date'], ascending=[True, True])
@@ -66,8 +77,8 @@ def daily_returns(df, plot = False):
     std_dev_daily_return = df['daily_return'].dropna().std()
     annual_std_dev = std_dev_daily_return * np.sqrt(250)
 
-    buy_and_hold_return=(df[df['date'] >= start_date]['close'].iloc[0]) - (df['close'].iloc[-1])
-    buy_and_hold_return_pct = (buy_and_hold_return/(df['close'].iloc[-1]))*100
+    buy_and_hold_return= (df['close'].iloc[-1]) - (df[df['date'] == start_date]['close'].iloc[0])
+    buy_and_hold_return_pct = (buy_and_hold_return/(df[df['date'] == start_date]['close'].iloc[0]))*100
 
     if plot:
         
@@ -95,7 +106,7 @@ def daily_returns(df, plot = False):
         plt.tight_layout()
         plt.show()
 
-    return {
+    metric =  {
         "mean daily return": mean_daily_return,
         "annual return": annual_return,
         "std_dev_daily_return": std_dev_daily_return,
@@ -103,6 +114,9 @@ def daily_returns(df, plot = False):
         "buy_and_hold_return": buy_and_hold_return,
         "buy_and_hold_return_pct": buy_and_hold_return_pct
     }
+
+    metrics_df = pd.DataFrame([metric]) 
+    return metrics_df
 
 def indexes_return(first_trade_date, last_trade_date, symbol = "^NSEI"):
 
@@ -131,10 +145,10 @@ def indexes_return(first_trade_date, last_trade_date, symbol = "^NSEI"):
 def metrics(trade_df,initial_cap, risk_free_rate = 0.07, confidence_level = 0.95):
 
     max_drawdown = trade_df['drawdown'].min()
-    mean_daily_return = trade_df['daily_return%'].dropna().mean()  
+    mean_daily_return = trade_df['daily_return'].dropna().mean()  
     annual_return = mean_daily_return*250
 
-    std_dev_daily_return = trade_df['daily_return%'].dropna().std()
+    std_dev_daily_return = trade_df['daily_return'].dropna().std()
     annual_volatility = std_dev_daily_return * np.sqrt(250)
 
     if annual_volatility == 0 or np.isnan(annual_volatility):
@@ -145,8 +159,11 @@ def metrics(trade_df,initial_cap, risk_free_rate = 0.07, confidence_level = 0.95
     wins = trade_df[trade_df['pl_adj'] > 0]
     losses = trade_df[trade_df['pl_adj'] < 0]
     total_pl = trade_df['pl_adj'].sum()
+    total_investment = trade_df['invested'].sum()
+    return_pct = total_pl/total_investment
     total_days_held = trade_df['holding_period'].sum() 
     
+    symbol = trade_df['symbol'].unique().tolist()
     num_wins = len(wins)
     num_losses = len(losses)
     total_trades = len(trade_df)
@@ -166,11 +183,17 @@ def metrics(trade_df,initial_cap, risk_free_rate = 0.07, confidence_level = 0.95
     else:
         final_value = trade_df['cumulative_return'].iloc[-1]
         years_held = total_days_held / 365
-        cagr = final_value ** (1 / years_held) - 1 if years_held > 0 else np.nan
 
-    return {
+        if pd.notna(final_value) and final_value > 0 and years_held > 0:
+            cagr = final_value ** (1 / years_held) - 1
+        else:
+            cagr = np.nan
 
+    metric =  {
+                "symbol": symbol,
                 "total_pl": total_pl,
+                "total_investment": total_investment,
+                "return_pct": return_pct,
                 "total_days_held": total_days_held,
                 "annual_return": annual_return,
                 "annual_volatility": annual_volatility,
@@ -190,9 +213,12 @@ def metrics(trade_df,initial_cap, risk_free_rate = 0.07, confidence_level = 0.95
                 "first_trade": first_trade,
                 "last_trade": trade_df['entry_date'].max(),
                 "VaR": VaR_1d_value
-            }    
+            }
 
-def order_book_transformation(symbol, strategy_name, slippage_rate = 0.001, start_date = '2024-01-01'):
+    metrics_df = pd.DataFrame([metric])    
+    return metrics_df
+
+def order_book_transformation(symbol, strategy_name,initial_cap, slippage_rate = 0.001,max_risk = 0.01, commission = 0.0005, start_date = '2023-01-01'):
         
         query="""
             SELECT * 
@@ -201,18 +227,27 @@ def order_book_transformation(symbol, strategy_name, slippage_rate = 0.001, star
             and entry_date >= %(start_date)s and status = 'closed';
         """        
 
-        trade_df = pd.read_sql(query, engine, params={"symbol": symbol, "strategy": strategy_name, "start_date":start_date})
-
-        if trade_df.empty:
-            return {"error": "No closed trades found for this symbol/strategy"}
+        trade_df = pd.read_sql(query, engine, params={"symbol": symbol, "strategy_name": strategy_name, "start_date":start_date})
+        
+        max_cap_per_trade = max_risk*initial_cap
 
         trade_df['entry_date'] = pd.to_datetime(trade_df['entry_date'])
         trade_df = trade_df.sort_values(by='entry_date', ascending= True)
 
+        trade_df['symbol'] = symbol
+
         trade_df['entry_price_adj'] = trade_df['entry_price'] * (1 + slippage_rate)
         trade_df['exit_price_adj'] = trade_df['exit_price'] * (1 - slippage_rate)
-        trade_df['pl_adj'] = (trade_df['exit_price_adj'] - trade_df['entry_price_adj']) * trade_df['qty']
 
+        trade_df['stop_diff'] = trade_df['entry_price_adj'] - trade_df['stop_loss']
+
+        trade_df = trade_df[(trade_df['stop_diff'] > 0) & (trade_df['entry_price_adj'] > 0)]  # Ensure valid stop losses
+
+        trade_df['quantity'] = (max_cap_per_trade // trade_df['stop_diff']).astype(int)
+        trade_df['max_affordable_qty'] = (initial_cap // trade_df['entry_price_adj']).astype(int)
+        trade_df['quantity'] = trade_df[['quantity', 'max_affordable_qty']].min(axis=1)
+
+        trade_df['pl_adj'] = (trade_df['exit_price_adj'] - trade_df['entry_price_adj']) * trade_df['quantity']
 
         trade_df['daily_return'] = trade_df['pl_adj']/trade_df['holding_period']
         
@@ -221,8 +256,35 @@ def order_book_transformation(symbol, strategy_name, slippage_rate = 0.001, star
         trade_df['cumulative_return'] = (1 + trade_df['daily_return%']).cumprod()
         trade_df['cumulative_max'] = trade_df['cumulative_return'].cummax()
         trade_df['drawdown'] = trade_df['cumulative_return'] / trade_df['cumulative_max'] - 1
-        
+
+        trade_df = trade_df[trade_df['quantity'] > 0]
+        trade_df['commission_cost'] = trade_df['quantity'] * (trade_df['entry_price_adj'] + trade_df['exit_price_adj']) * commission
+        trade_df['net_pl'] = trade_df['pl_adj'] - trade_df['commission_cost']
+        trade_df['order_cost'] = (trade_df['entry_price_adj'] * trade_df['quantity']) + trade_df['commission_cost']
+
+
+        balance = initial_cap
+        balances = []
+        invested = []
+        executed = []
+
+        for _, row in trade_df.iterrows():
+            if row['order_cost'] <= balance:
+                balance -= row['order_cost']
+                balances.append(balance)
+                executed.append(True)
+                invested.append(row['order_cost'])
+            else:
+                balances.append(balance)  # or np.nan if you prefer
+                executed.append(False)
+                invested.append(0)
+
+        trade_df['balances'] = balances
+        trade_df['executed'] = executed
+        trade_df['invested'] = invested
+
         return trade_df
+        
 
 def position_sizing(trade_df, initial_cap, max_risk = 0.01, commission = 0.0005):
     
@@ -234,6 +296,16 @@ def position_sizing(trade_df, initial_cap, max_risk = 0.01, commission = 0.0005)
     trade_df['quantity'] = (max_cap_per_trade // trade_df['stop_diff']).astype(int)
     trade_df['max_affordable_qty'] = (initial_cap // trade_df['entry_price_adj']).astype(int)
     trade_df['quantity'] = trade_df[['quantity', 'max_affordable_qty']].min(axis=1)
+    trade_df['pl_adj'] = (trade_df['exit_price_adj'] - trade_df['entry_price_adj']) * trade_df['quantity']
+
+    trade_df['daily_return'] = trade_df['pl_adj']/trade_df['holding_period']
+        
+    trade_df['daily_return%'] = (trade_df['daily_return']/trade_df['entry_price'])
+
+    trade_df['cumulative_return'] = (1 + trade_df['daily_return%']).cumprod()
+    trade_df['cumulative_max'] = trade_df['cumulative_return'].cummax()
+    trade_df['drawdown'] = trade_df['cumulative_return'] / trade_df['cumulative_max'] - 1
+    
     trade_df = trade_df[trade_df['quantity'] > 0]
     trade_df['commission_cost'] = trade_df['quantity'] * (trade_df['entry_price_adj'] + trade_df['exit_price_adj']) * commission
     trade_df['net_pl'] = trade_df['pl_adj'] - trade_df['commission_cost']
