@@ -19,15 +19,16 @@ engine = create_engine(SQL_ALCHEMY_CONN)
 
 class backTester:
 
-    def __init__(self, strategy_func, strategy_name):
+    def __init__(self, nATR, strategy_func, strategy_name):
         self.strategy_func = strategy_func      
-        self.strategy_name = strategy_name      
+        self.strategy_name = strategy_name
+        self.nATR = nATR      
         self.populate_order_book()
 
 
     def populate_order_book(self):
         df = self.strategy_func()
-        trade_book(df,strategy=self.strategy_name)
+        trade_book(self.nATR, df,strategy=self.strategy_name)
 
 def fetch_symbols():
 
@@ -292,12 +293,9 @@ def all_orders_and_metrics(strategy, initial_capital):
     final_df['drawdown_norm'] = 1 - scaler.fit_transform(final_df[['max_drawdown']])
 
     final_df['score'] =  (0.5 * final_df['sharpe_norm']) + (0.3 * final_df['winrate_norm']) + (0.2 * (1 - final_df['drawdown_norm']))
-    final_df['score_norm'] = scaler.fit_transform(final_df[['score']])
+    
     final_df['symbol'] = final_df['symbol'].str[0]
-    all_orders_df=all_orders_df.merge(final_df[['symbol','score_norm']], on='symbol', how='left')
-
-    all_orders_buy_df = all_orders_df.copy()
-    all_orders_df = all
+    all_orders_df=all_orders_df.merge(final_df[['symbol','score']], on='symbol', how='left')
     
     return final_df, all_orders_df
 
@@ -311,7 +309,7 @@ def dynamic_allocation(all_orders_df, initial_capital,capital_exposure, commissi
         
         data = all_orders_df[all_orders_df['entry_date']==date].sort_values('score_norm', ascending = False)
         capital_for_day = capital_exposure*balance
-        data['score_norm_day'] = data['score_norm']/data['score_norm'].sum()
+        data['score_norm'] = data['score']/data['score'].sum()
         
         for _, row in data.iterrows():
             
@@ -327,20 +325,27 @@ def dynamic_allocation(all_orders_df, initial_capital,capital_exposure, commissi
             balances.append(balance)
             
             
-def order_book(all_orders_df):
+def indv_trade_listing(df):
 
-    buy_df = all_orders_df[['symbol', 'entry_date']].copy()
-    buy_df['date'] = buy_df['entry_date']
-    buy_df['action'] = 'buy'
-    buy_df.drop(columns=['entry_date'], inplace=True)
+    buy_df = df[['symbol', 'entry_date', 'entry_price', 'strategy', 'created_at', 'updated_at', 'stop_loss', 'entry_price_adj']].copy()
+    
+    buy_df['price'] = buy_df['entry_price']
+    buy_df['order_type'] = 'Buy'
+    buy_df['date'] = pd.to_datetime(buy_df['entry_date'])
+    buy_df['price_adj'] = buy_df['entry_price_adj']
+    buy_df.drop(columns=['entry_date', 'entry_price', 'entry_price_adj'], inplace=True)
 
-    sell_df = all_orders_df[['symbol', 'exit_date']].copy()
-    sell_df['date'] = sell_df['exit_date']
-    sell_df['action'] = 'sell'
-    sell_df.drop(columns=['exit_date'], inplace=True)
+    sell_df = df[['symbol', 'exit_date', 'exit_price', 'strategy', 'created_at', 'updated_at', 'stop_loss', 'exit_price_adj']].copy()
+    
+    sell_df['price'] = sell_df['exit_price']
+    sell_df['order_type'] = 'Sell'
+    sell_df['date'] = pd.to_datetime(sell_df['exit_date'])
+    sell_df['price_adj'] = sell_df['exit_price_adj']
+    sell_df.drop(columns=['exit_date', 'exit_price', 'exit_price_adj'], inplace=True)
 
     event_df = pd.concat([buy_df, sell_df], ignore_index=True)
-    event_df = event_df[['date', 'symbol', 'action']].sort_values(['date', 'symbol'])
+    # event_df = event_df.sort_values(by=['date', 'symbol'])
+    # event_df = event_df.merge(all_orders_df[['symbol', 'score']], on='symbol', how='left')
 
     return event_df
     
