@@ -285,45 +285,81 @@ def all_orders_and_metrics(strategy, initial_capital):
         
     final_df = pd.concat(results_list, ignore_index=True)
     all_orders_df = pd.concat(orders_list, ignore_index=True)
-
-    scaler = MinMaxScaler()
-
-    final_df['sharpe_norm'] = scaler.fit_transform(final_df[['sharpe_ratio']])
-    final_df['winrate_norm'] = scaler.fit_transform(final_df[['win_rate']])
-    final_df['drawdown_norm'] = 1 - scaler.fit_transform(final_df[['max_drawdown']])
-
-    final_df['score'] =  (0.5 * final_df['sharpe_norm']) + (0.3 * final_df['winrate_norm']) + (0.2 * (1 - final_df['drawdown_norm']))
-    
-    final_df['symbol'] = final_df['symbol'].str[0]
-    all_orders_df=all_orders_df.merge(final_df[['symbol','score']], on='symbol', how='left')
     
     return final_df, all_orders_df
 
-def dynamic_allocation(all_orders_df, initial_capital,capital_exposure, commission=0.0005):
-    dates_df = all_orders_df['entry_date'].unique()
+def normalisation(df):
+
+    scaler = MinMaxScaler()
+
+    df['sharpe_norm'] = scaler.fit_transform(df[['sharpe_ratio']])
+    df['winrate_norm'] = scaler.fit_transform(df[['win_rate']])
+    df['drawdown_norm'] = 1 - scaler.fit_transform(df[['max_drawdown']])
+
+    df['score'] =  (0.5 * df['sharpe_norm']) + (0.3 * df['winrate_norm']) + (0.2 * (1 - df['drawdown_norm']))
     
-    balances=[]
+    df['symbol'] = df['symbol'].str[0]
+    # all_orders_df=all_orders_df.merge(df[['symbol','score']], on='symbol', how='left')
+
+    return df
+
+def dynamic_allocation(df, initial_capital,capital_exposure, max_risk, commission=0.0005):
     
+    dates_df = df['date'].unique()
     balance = initial_capital
+    max_risk_per_trade = max_risk*balance
+    trade_log=[]
+    holdings={}
+    
     for date in dates_df:
         
-        data = all_orders_df[all_orders_df['entry_date']==date].sort_values('score_norm', ascending = False)
+        data = df[df['date']==date].sort_values('score_norm', ascending = False)
         capital_for_day = capital_exposure*balance
         data['score_norm'] = data['score']/data['score'].sum()
         
         for _, row in data.iterrows():
             
-            score_calc_capital_for_stock=row['score_norm_day']*capital_for_day
-            
-            max_affordable_quantity = int(score_calc_capital_for_stock//row['entry_price_adj'])
-            quantity = min(max_affordable_quantity, row['quantity'])
-            entry_commissions = quantity*(row['entry_price_adj'])*commission
-            exit_commissions = quantity*(row['exit_price_adj'])* commission
-            entry_order_value = (quantity*row['entry_price_adj']) 
-            exit_order_value = (quantity*row['exit_price_adj'])
-            balance = balance - entry_order_value - entry_commissions
-            balances.append(balance)
-            
+            symbol=row['symbol']
+            price_adj = row['price_adj']
+            score_calc_capital_for_stock=row['score_norm']*capital_for_day
+            stop_diff = max(price_adj - row['stop_loss'], 0.02)
+            risk_adj_quantity = int(max_risk_per_trade//stop_diff)
+            max_affordable_quantity = int(score_calc_capital_for_stock//row['price_adj'])
+            quantity = min(max_affordable_quantity,risk_adj_quantity)
+            commission_cost = quantity*price_adj*commission
+            total_cost =  (quantity * price_adj) + commission_cost
+        
+            if row['order_type'] == 'Buy':
+                if balance >= total_cost:
+                    balance-=total_cost
+                    holdings[symbol] = holdings.get(symbol, 0) + quantity
+                    trade_log.append({
+                        "symbol": symbol,
+                        "date": date,
+                        "price_adj": price_adj,
+                        "order_type": 'Buy',
+                        "quantity": quantity,
+                        "commision_cost": commission_cost,
+                        "total_cost":total_cost,
+                        "balance":balance
+                    })
+            elif row['order_type'] == 'Sell':
+                
+                if holdings.get(symbol, 0) >= quantity:
+                    holdings[symbol] -= quantity
+                    sell_value = (quantity*price_adj) - commission_cost
+                    balance += sell_value 
+                    trade_log.append({
+                        "symbol": symbol,
+                        "date": date,
+                        "price_adj": price_adj,
+                        "order_type": 'Sell',
+                        "quantity": quantity,
+                        "commision_cost": commission_cost,
+                        "total_cost":total_cost,
+                        "balance":balance
+                    })
+    return pd.DataFrame(trade_log)
             
 def indv_trade_listing(df):
 

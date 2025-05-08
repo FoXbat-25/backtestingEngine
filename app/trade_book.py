@@ -4,7 +4,7 @@ import psycopg2
 import pandas as pd 
 from datetime import datetime
 
-def trade_book(df, strategy):
+def trade_book(nATR, df, strategy):
     with psycopg2.connect(SQL_POSTGRES_CONN) as conn:
         with conn.cursor() as cursor:
             
@@ -49,7 +49,7 @@ def trade_book(df, strategy):
                             open_positions = row['next_open']
                             entry_atr = (row['ATR'])
 
-                            stop_loss = (open_positions - (1.5*entry_atr))
+                            stop_loss = (open_positions - (nATR*entry_atr))
 
                             now_timestamp = datetime.now()
 
