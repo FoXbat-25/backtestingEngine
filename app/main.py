@@ -8,35 +8,14 @@ def main():
     initial_capital = 1000000
     
     # backTester(strategy_func=mean_reversion, strategy_name=strategy) # This inserts data into postgresql
-
-    symbols_df = fetch_symbols()
-    results_list = []
-
-    symbols_df = symbols_df['symbol'].unique()
-    for symbol in symbols_df:   
-
-        trade_df = order_book_transformation(symbol, strategy, initial_capital)
-
-        if not trade_df.empty:
-            results = metrics(trade_df, initial_capital)
-            results_list.append(results)
-        
-        else:
-            print(f'No trade for symbol: {symbol}.')
-        
-    final_df = pd.concat(results_list, ignore_index=True)
-
-    final_df = final_df.sort_values(by='sharpe_ratio', ascending=False)
-    # final_df.to_csv("output.csv", index=False)
-    print(final_df)
-
-
-    # trade_df = order_book_transformation(symbol, strategy, initial_capital)
-    # # pd.set_option('display.max_columns', None)
-    # print(trade_df)
-
-
-
+    # df = order_book_transformation(symbol, strategy, initial_capital)
+    metrics_df, orders_df  = all_orders_and_metrics(strategy, initial_capital)
+    # metrics_df['symbol'] = metrics_df['symbol']
+    orders_df=orders_df.merge(metrics_df[['symbol','score' ]], on='symbol', how='left')
+    # pd.set_option('display.max_columns', None)
+    print(metrics_df)
+    orders_df=orders_df.sort_values(by='entry_date', ascending = True)
+    print(orders_df)
 if __name__ == "__main__":
     main()
 

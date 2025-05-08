@@ -1,14 +1,13 @@
 import sys
 import os
 
-# Add the parent directory (where meanReversion lives) to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine
 
-
+from sklearn.preprocessing import MinMaxScaler
 
 from datetime import datetime
 import matplotlib as plt
@@ -21,8 +20,8 @@ engine = create_engine(SQL_ALCHEMY_CONN)
 class backTester:
 
     def __init__(self, strategy_func, strategy_name):
-        self.strategy_func = strategy_func      # Save the strategy function
-        self.strategy_name = strategy_name      # Save the name for logging/trade book
+        self.strategy_func = strategy_func      
+        self.strategy_name = strategy_name      
         self.populate_order_book()
 
 
@@ -159,7 +158,7 @@ def metrics(trade_df,initial_cap, risk_free_rate = 0.07, confidence_level = 0.95
     wins = trade_df[trade_df['pl_adj'] > 0]
     losses = trade_df[trade_df['pl_adj'] < 0]
     total_pl = trade_df['pl_adj'].sum()
-    total_investment = trade_df['invested'].sum()
+    total_investment = trade_df['order_cost'].sum()
     return_pct = total_pl/total_investment
     total_days_held = trade_df['holding_period'].sum() 
     
@@ -179,7 +178,7 @@ def metrics(trade_df,initial_cap, risk_free_rate = 0.07, confidence_level = 0.95
     VaR_1d_value = initial_cap * abs(VaR_1d) 
 
     if total_days_held == 0:
-        cagr = np.nan  # Avoid division by zero
+        cagr = np.nan  
     else:
         final_value = trade_df['cumulative_return'].iloc[-1]
         years_held = total_days_held / 365
@@ -227,7 +226,7 @@ def order_book_transformation(symbol, strategy_name,initial_cap, slippage_rate =
             and entry_date >= %(start_date)s and status = 'closed';
         """        
 
-        trade_df = pd.read_sql(query, engine, params={"symbol": symbol, "strategy_name": strategy_name, "start_date":start_date})
+        trade_df = pd.read_sql(query, engine, params={"symbol": symbol, "strategy_name": strategy_name, "start_date":start_date}) 
         
         max_cap_per_trade = max_risk*initial_cap
 
@@ -260,70 +259,153 @@ def order_book_transformation(symbol, strategy_name,initial_cap, slippage_rate =
         trade_df = trade_df[trade_df['quantity'] > 0]
         trade_df['commission_cost'] = trade_df['quantity'] * (trade_df['entry_price_adj'] + trade_df['exit_price_adj']) * commission
         trade_df['net_pl'] = trade_df['pl_adj'] - trade_df['commission_cost']
-        trade_df['order_cost'] = (trade_df['entry_price_adj'] * trade_df['quantity']) + trade_df['commission_cost']
-
-
-        balance = initial_cap
-        balances = []
-        invested = []
-        executed = []
-
-        for _, row in trade_df.iterrows():
-            if row['order_cost'] <= balance:
-                balance -= row['order_cost']
-                balances.append(balance)
-                executed.append(True)
-                invested.append(row['order_cost'])
-            else:
-                balances.append(balance)  # or np.nan if you prefer
-                executed.append(False)
-                invested.append(0)
-
-        trade_df['balances'] = balances
-        trade_df['executed'] = executed
-        trade_df['invested'] = invested
+        trade_df['order_cost'] = (trade_df['entry_price_adj'] * trade_df['quantity']) + trade_df['commission_cost']       
 
         return trade_df
         
-
-def position_sizing(trade_df, initial_cap, max_risk = 0.01, commission = 0.0005):
+def all_orders_and_metrics(strategy, initial_capital):
     
-    max_cap_per_trade = max_risk*initial_cap
+    results_list = []
+    orders_list = []
 
-    trade_df['stop_diff'] = trade_df['entry_price_adj'] - trade_df['stop_loss']
-    trade_df = trade_df[(trade_df['stop_diff'] > 0) & (trade_df['entry_price_adj'] > 0)]  # Ensure valid stop losses
+    symbols_df = fetch_symbols()
+    symbols_df = symbols_df['symbol'].unique()
+    for symbol in symbols_df:   
 
-    trade_df['quantity'] = (max_cap_per_trade // trade_df['stop_diff']).astype(int)
-    trade_df['max_affordable_qty'] = (initial_cap // trade_df['entry_price_adj']).astype(int)
-    trade_df['quantity'] = trade_df[['quantity', 'max_affordable_qty']].min(axis=1)
-    trade_df['pl_adj'] = (trade_df['exit_price_adj'] - trade_df['entry_price_adj']) * trade_df['quantity']
+        trade_df = order_book_transformation(symbol, strategy, initial_capital)
 
-    trade_df['daily_return'] = trade_df['pl_adj']/trade_df['holding_period']
+        if not trade_df.empty:
+            results = metrics(trade_df, initial_capital)
+            results_list.append(results)
+            orders_list.append(trade_df)
         
-    trade_df['daily_return%'] = (trade_df['daily_return']/trade_df['entry_price'])
+        else:
+            print(f'No trade for symbol: {symbol}.')
+        
+    final_df = pd.concat(results_list, ignore_index=True)
+    all_orders_df = pd.concat(orders_list, ignore_index=True)
 
-    trade_df['cumulative_return'] = (1 + trade_df['daily_return%']).cumprod()
-    trade_df['cumulative_max'] = trade_df['cumulative_return'].cummax()
-    trade_df['drawdown'] = trade_df['cumulative_return'] / trade_df['cumulative_max'] - 1
+    scaler = MinMaxScaler()
+
+    final_df['sharpe_norm'] = scaler.fit_transform(final_df[['sharpe_ratio']])
+    final_df['winrate_norm'] = scaler.fit_transform(final_df[['win_rate']])
+    final_df['drawdown_norm'] = 1 - scaler.fit_transform(final_df[['max_drawdown']])
+
+    final_df['score'] =  (0.5 * final_df['sharpe_norm']) + (0.3 * final_df['winrate_norm']) + (0.2 * (1 - final_df['drawdown_norm']))
+    final_df['score_norm'] = scaler.fit_transform(final_df[['score']])
+    final_df['symbol'] = final_df['symbol'].str[0]
+    all_orders_df=all_orders_df.merge(final_df[['symbol','score_norm']], on='symbol', how='left')
+
+    all_orders_buy_df = all_orders_df.copy()
+    all_orders_df = all
     
-    trade_df = trade_df[trade_df['quantity'] > 0]
-    trade_df['commission_cost'] = trade_df['quantity'] * (trade_df['entry_price_adj'] + trade_df['exit_price_adj']) * commission
-    trade_df['net_pl'] = trade_df['pl_adj'] - trade_df['commission_cost']
-    trade_df['order_cost'] = (trade_df['entry_price_adj'] * trade_df['quantity']) + trade_df['commission_cost']
+    return final_df, all_orders_df
 
-    for _, row in trade_df.iterrows():
+def dynamic_allocation(all_orders_df, initial_capital,capital_exposure, commission=0.0005):
+    dates_df = all_orders_df['entry_date'].unique()
+    
+    balances=[]
+    
+    balance = initial_capital
+    for date in dates_df:
         
-        balance = initial_cap
-        balances = []
-
-        if row['order_cost'] <= balance:
-            balance -= row['order_cost']
+        data = all_orders_df[all_orders_df['entry_date']==date].sort_values('score_norm', ascending = False)
+        capital_for_day = capital_exposure*balance
+        data['score_norm_day'] = data['score_norm']/data['score_norm'].sum()
         
-        else: 
-            print("No money for trades")
+        for _, row in data.iterrows():
+            
+            score_calc_capital_for_stock=row['score_norm_day']*capital_for_day
+            
+            max_affordable_quantity = int(score_calc_capital_for_stock//row['entry_price_adj'])
+            quantity = min(max_affordable_quantity, row['quantity'])
+            entry_commissions = quantity*(row['entry_price_adj'])*commission
+            exit_commissions = quantity*(row['exit_price_adj'])* commission
+            entry_order_value = (quantity*row['entry_price_adj']) 
+            exit_order_value = (quantity*row['exit_price_adj'])
+            balance = balance - entry_order_value - entry_commissions
+            balances.append(balance)
+            
+            
+def order_book(all_orders_df):
+
+    buy_df = all_orders_df[['symbol', 'entry_date']].copy()
+    buy_df['date'] = buy_df['entry_date']
+    buy_df['action'] = 'buy'
+    buy_df.drop(columns=['entry_date'], inplace=True)
+
+    sell_df = all_orders_df[['symbol', 'exit_date']].copy()
+    sell_df['date'] = sell_df['exit_date']
+    sell_df['action'] = 'sell'
+    sell_df.drop(columns=['exit_date'], inplace=True)
+
+    event_df = pd.concat([buy_df, sell_df], ignore_index=True)
+    event_df = event_df[['date', 'symbol', 'action']].sort_values(['date', 'symbol'])
+
+    return event_df
+    
+
+# def dynamic_allocation(final_df):
+
+
+# def position_sizing(trade_df, initial_cap, max_risk = 0.01, commission = 0.0005):
+    
+#     max_cap_per_trade = max_risk*initial_cap
+
+#     trade_df['stop_diff'] = trade_df['entry_price_adj'] - trade_df['stop_loss']
+#     trade_df = trade_df[(trade_df['stop_diff'] > 0) & (trade_df['entry_price_adj'] > 0)]  # Ensure valid stop losses
+
+#     trade_df['quantity'] = (max_cap_per_trade // trade_df['stop_diff']).astype(int)
+#     trade_df['max_affordable_qty'] = (initial_cap // trade_df['entry_price_adj']).astype(int)
+#     trade_df['quantity'] = trade_df[['quantity', 'max_affordable_qty']].min(axis=1)
+#     trade_df['pl_adj'] = (trade_df['exit_price_adj'] - trade_df['entry_price_adj']) * trade_df['quantity']
+
+#     trade_df['daily_return'] = trade_df['pl_adj']/trade_df['holding_period']
         
-        balances.append(balance)
+#     trade_df['daily_return%'] = (trade_df['daily_return']/trade_df['entry_price'])
 
-    trade_df['balance'] = balances
+#     trade_df['cumulative_return'] = (1 + trade_df['daily_return%']).cumprod()
+#     trade_df['cumulative_max'] = trade_df['cumulative_return'].cummax()
+#     trade_df['drawdown'] = trade_df['cumulative_return'] / trade_df['cumulative_max'] - 1
+    
+#     trade_df = trade_df[trade_df['quantity'] > 0]
+#     trade_df['commission_cost'] = trade_df['quantity'] * (trade_df['entry_price_adj'] + trade_df['exit_price_adj']) * commission
+#     trade_df['net_pl'] = trade_df['pl_adj'] - trade_df['commission_cost']
+#     trade_df['order_cost'] = (trade_df['entry_price_adj'] * trade_df['quantity']) + trade_df['commission_cost']
 
-    return trade_df
+#     for _, row in trade_df.iterrows():
+        
+#         balance = initial_cap
+#         balances = []
+
+#         if row['order_cost'] <= balance:
+#             balance -= row['order_cost']
+        
+#         else: 
+#             print("No money for trades")
+        
+#         balances.append(balance)
+
+#     trade_df['balance'] = balances
+
+#     return trade_df
+
+
+# balance = initial_cap
+#         balances = []
+#         invested = []
+#         executed = []
+# for _, row in trade_df.iterrows():
+#             if row['order_cost'] <= balance:
+#                 balance -= row['order_cost']
+#                 balances.append(balance)
+#                 executed.append(True)
+#                 invested.append(row['order_cost'])
+#             else:
+#                 balances.append(balance)  # or np.nan if you prefer
+#                 executed.append(False)
+#                 invested.append(0)
+
+#         trade_df['balances'] = balances
+#         trade_df['executed'] = executed
+#         trade_df['invested'] = invested
