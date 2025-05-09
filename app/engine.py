@@ -274,7 +274,6 @@ def all_orders_and_metrics(strategy, initial_capital):
     for symbol in symbols_df:   
 
         trade_df = order_book_transformation(symbol, strategy, initial_capital)
-
         if not trade_df.empty:
             results = metrics(trade_df, initial_capital)
             results_list.append(results)
@@ -284,6 +283,7 @@ def all_orders_and_metrics(strategy, initial_capital):
             print(f'No trade for symbol: {symbol}.')
         
     final_df = pd.concat(results_list, ignore_index=True)
+    final_df = normalisation(final_df)
     all_orders_df = pd.concat(orders_list, ignore_index=True)
     
     return final_df, all_orders_df
@@ -313,7 +313,7 @@ def dynamic_allocation(df, initial_capital,capital_exposure, max_risk, commissio
     
     for date in dates_df:
         
-        data = df[df['date']==date].sort_values('score_norm', ascending = False)
+        data = df[df['date']==date].sort_values('score', ascending = False)
         capital_for_day = capital_exposure*balance
         data['score_norm'] = data['score']/data['score'].sum()
         
@@ -344,9 +344,10 @@ def dynamic_allocation(df, initial_capital,capital_exposure, max_risk, commissio
                         "balance":balance
                     })
             elif row['order_type'] == 'Sell':
-                
-                if holdings.get(symbol, 0) >= quantity:
-                    holdings[symbol] -= quantity
+                held_qty = holdings.get(symbol, 0)
+                if held_qty > 0:
+                    quantity = held_qty
+                    holdings[symbol] = 0
                     sell_value = (quantity*price_adj) - commission_cost
                     balance += sell_value 
                     trade_log.append({
@@ -356,14 +357,14 @@ def dynamic_allocation(df, initial_capital,capital_exposure, max_risk, commissio
                         "order_type": 'Sell',
                         "quantity": quantity,
                         "commision_cost": commission_cost,
-                        "total_cost":total_cost,
+                        "total_cost": sell_value,
                         "balance":balance
                     })
     return pd.DataFrame(trade_log)
             
 def indv_trade_listing(df):
 
-    buy_df = df[['symbol', 'entry_date', 'entry_price', 'strategy', 'created_at', 'updated_at', 'stop_loss', 'entry_price_adj']].copy()
+    buy_df = df[['symbol', 'entry_date', 'entry_price', 'score', 'strategy', 'created_at', 'updated_at', 'stop_loss', 'entry_price_adj']].copy()
     
     buy_df['price'] = buy_df['entry_price']
     buy_df['order_type'] = 'Buy'
@@ -371,7 +372,7 @@ def indv_trade_listing(df):
     buy_df['price_adj'] = buy_df['entry_price_adj']
     buy_df.drop(columns=['entry_date', 'entry_price', 'entry_price_adj'], inplace=True)
 
-    sell_df = df[['symbol', 'exit_date', 'exit_price', 'strategy', 'created_at', 'updated_at', 'stop_loss', 'exit_price_adj']].copy()
+    sell_df = df[['symbol', 'exit_date', 'exit_price', 'score', 'strategy', 'created_at', 'updated_at', 'stop_loss', 'exit_price_adj']].copy()
     
     sell_df['price'] = sell_df['exit_price']
     sell_df['order_type'] = 'Sell'
