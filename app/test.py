@@ -12,28 +12,19 @@ def main():
     max_risk = 0.01
     
     # backTester(nATR, strategy_func=mean_reversion, strategy_name=strategy) # This inserts data into postgresql
-    df = order_book_transformation(symbol, strategy, initial_capital)
-    metrics_df, all_orders_df  = all_orders_and_metrics(strategy, initial_capital)
-    # metrics_df['symbol'] = metrics_df['symbol']
-    # orders_df=orders_df.merge(metrics_df[['symbol','score']], on='symbol', how='left')
-    # pd.set_option('display.max_columns', None)
-    #print(metrics_df)
-    # orders_df=orders_df.sort_values(by='entry_date', ascending = True)
-    #pd.set_option('display.max_columns', None)
-    # print(orders_df)
+    # df = order_book_transformation(symbol, strategy, initial_capital)
+    # metrics_df, all_orders_df  = all_orders_and_metrics(strategy, initial_capital)
+
     
     # df=df.merge(metrics_df[['symbol','score']], on='symbol', how='left')
     # event_df = indv_trade_listing(df)
     # event_df = event_df.sort_values(by='date')
     # df = dynamic_allocation(event_df, initial_capital, capital_exposure, max_risk, commission=commission)
-    print(initial_capital)
-    print(all_orders_df)
-    all_orders_df.to_csv('all_orders.csv')
-    all_orders_df = all_orders_df.merge(metrics_df[['symbol','score']], on='symbol', how='left')
-    trade_log = dynamic_allocation(all_orders_df, initial_capital, capital_exposure, max_risk, commission=commission)
-    trade_log = trade_log.sort_values('date', ascending= True)
-    trade_log.to_csv('trade_log.csv')
-    print(trade_log)
+    
+    df = fetch_data(symbol)
+    daily_df = daily_returns(df)
+    print(daily_df)
+
 if __name__ == "__main__":
     main()
 
