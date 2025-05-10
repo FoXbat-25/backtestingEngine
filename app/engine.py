@@ -67,7 +67,7 @@ def fetch_data(symbol, start_date='2023-01-01', end_date = datetime.today().date
 
     return df
 
-def daily_returns(df, plot = False):
+def daily_returns(df):
 
     start_date = df['date'].min()
 
@@ -79,32 +79,6 @@ def daily_returns(df, plot = False):
 
     buy_and_hold_return= (df['close'].iloc[-1]) - (df[df['date'] == start_date]['close'].iloc[0])
     buy_and_hold_return_pct = (buy_and_hold_return/(df[df['date'] == start_date]['close'].iloc[0]))*100
-
-    if plot:
-        
-        plt.figure(figsize=(14, 6))
-
-        # Daily Returns over time
-        plt.subplot(1, 2, 1)
-        plt.plot(df['date'], df['daily_return%'], label='Daily Return %', color='blue')
-        plt.axhline(mean_daily_return, color='green', linestyle='--', label=f'Mean Daily Return ({mean_daily_return:.4f})')
-        plt.title('Daily Returns Over Time')
-        plt.xlabel('Date')
-        plt.ylabel('Daily Return (%)')
-        plt.legend()
-        plt.grid(True)
-
-        # Risk vs Return (Standard Deviation vs Mean Return)
-        plt.subplot(1, 2, 2)
-        plt.scatter(std_dev_daily_return, mean_daily_return, color='red')
-        plt.text(std_dev_daily_return, mean_daily_return, f"  μ={mean_daily_return:.4f}, σ={std_dev_daily_return:.4f}", fontsize=12)
-        plt.title('Risk vs Return')
-        plt.xlabel('Risk (Std Dev)')
-        plt.ylabel('Return (Mean)')
-        plt.grid(True)
-
-        plt.tight_layout()
-        plt.show()
 
     metric =  {
         "mean daily return": mean_daily_return,
@@ -323,8 +297,16 @@ def dynamic_allocation(df, initial_capital,capital_exposure, max_risk, commissio
             price_adj = row['price_adj']
             score_calc_capital_for_stock=row['score_norm']*capital_for_day
             stop_diff = max(price_adj - row['stop_loss'], 0.02)
-            risk_adj_quantity = int(max_risk_per_trade//stop_diff)
-            max_affordable_quantity = int(score_calc_capital_for_stock//row['price_adj'])
+
+            if pd.notna(max_risk_per_trade) and stop_diff > 0:
+                risk_adj_quantity = int(max_risk_per_trade//stop_diff)
+            else:
+                continue
+            
+            if pd.notna(score_calc_capital_for_stock) and pd.notna(row['price_adj']) and row['price_adj'] > 0:
+                max_affordable_quantity = int(score_calc_capital_for_stock // row['price_adj'])
+            else:
+                continue
             quantity = min(max_affordable_quantity,risk_adj_quantity)
             commission_cost = quantity*price_adj*commission
             total_cost =  (quantity * price_adj) + commission_cost
