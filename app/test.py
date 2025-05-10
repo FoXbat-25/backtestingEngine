@@ -14,9 +14,10 @@ def main():
     confidence_level = 0.95
     
     # backTester(nATR, strategy_func=mean_reversion, strategy_name=strategy) # This inserts data into postgresql
-    # df = order_book_transformation(symbol, strategy, initial_capital)
-    # metrics_df, all_orders_df  = all_orders_and_metrics(strategy, initial_capital)
-
+    # df = order_book_transformation(symbol, strategy)
+    # pd.set_option('display.max_columns', None)
+    metrics_df, all_orders_df  = all_orders_and_metrics(strategy, initial_capital)
+    print(all_orders_df)
     
     # df=df.merge(metrics_df[['symbol','score']], on='symbol', how='left')
     # event_df = indv_trade_listing(df)
@@ -27,8 +28,8 @@ def main():
     # daily_df = daily_metrics(df,risk_free_rate)
     # print(daily_df)
 
-    final_df = all_daily_metrics(risk_free_rate)
-    print(final_df)
+    # final_df = all_daily_metrics(risk_free_rate)
+    # print(final_df)
 if __name__ == "__main__":
     main()
 
