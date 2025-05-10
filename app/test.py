@@ -22,12 +22,12 @@ def main():
     #pd.set_option('display.max_columns', None)
     # print(orders_df)
     
-    df=df.merge(metrics_df[['symbol','score']], on='symbol', how='left')
-    event_df = indv_trade_listing(df)
-    event_df = event_df.sort_values(by='date')
-    df = dynamic_allocation(event_df, initial_capital, capital_exposure, max_risk, commission=commission)
-    
-    print(df)
+    # df=df.merge(metrics_df[['symbol','score']], on='symbol', how='left')
+    # event_df = indv_trade_listing(df)
+    # event_df = event_df.sort_values(by='date')
+    # df = dynamic_allocation(event_df, initial_capital, capital_exposure, max_risk, commission=commission)
+    print(initial_capital)
+    print(orders_df)
 if __name__ == "__main__":
     main()
 
