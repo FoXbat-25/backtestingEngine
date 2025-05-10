@@ -63,37 +63,10 @@ def fetch_data(symbol, start_date='2023-01-01', end_date = datetime.today().date
     df['prev_close'] = df['close'].shift(1)
 
     df['daily_return'] = df['close'] - df['prev_close']
-    df['log_return'] = np.log(df['close']/df['prev_close'])
+    df['daily_log_return'] = np.log(df['close']/df['prev_close'])
     df['daily_return%'] = (df['daily_return']/df['prev_close'])*100
 
     return df
-
-def daily_returns(df):
-
-    start_date = df['date'].min()
-    symbol = df['symbol'].unique()[0]
-    log_mean_daily_return = df['log_return'].dropna().mean()  
-    annual_return = log_mean_daily_return*250  
-
-    std_dev_daily_return = df['log_return'].dropna().std()
-    annual_std_dev = std_dev_daily_return * np.sqrt(250)
-
-    buy_and_hold_return= (df['close'].iloc[-1]) - (df[df['date'] == start_date]['close'].iloc[0])
-    buy_and_hold_return_pct = (buy_and_hold_return/(df[df['date'] == start_date]['close'].iloc[0]))*100
-
-    metric =  {
-        "symbol": symbol,
-        "log mean daily return": log_mean_daily_return,
-        "log annual return": annual_return,
-        "log std_dev_daily_return": std_dev_daily_return,
-        "log annual_std_dev": annual_std_dev,
-        "buy_and_hold_return": buy_and_hold_return,
-        "buy_and_hold_return_pct": buy_and_hold_return_pct
-    }
-
-    metrics_df = pd.DataFrame([metric]) 
-    return metrics_df
-
 
 def order_book_transformation(symbol, strategy_name,initial_cap, slippage_rate = 0.001,max_risk = 0.01, commission = 0.0005, start_date = '2023-01-01'):
         
@@ -120,12 +93,9 @@ def order_book_transformation(symbol, strategy_name,initial_cap, slippage_rate =
 
         trade_df = trade_df[(trade_df['stop_diff'] > 0) & (trade_df['entry_price_adj'] > 0)]  # Ensure valid stop losses
 
-        trade_df['pl_adj'] = (trade_df['exit_price_adj'] - trade_df['entry_price_adj']) # * trade_df['quantity']
-
         trade_df['log_return'] = np.log(trade_df['exit_price_adj']/trade_df['entry_price_adj'])
         trade_df['daily_log_return'] = trade_df['log_return']/trade_df['holding_period']
-        trade_df['daily_return'] = trade_df['pl_adj']/trade_df['holding_period']
-        
+
         trade_df['daily_return%'] = np.exp(trade_df['daily_log_return']) - 1
 
         trade_df['cumulative_log_return'] = trade_df['daily_log_return'].cumsum()
@@ -133,6 +103,9 @@ def order_book_transformation(symbol, strategy_name,initial_cap, slippage_rate =
         
         trade_df['cumulative_max'] = trade_df['cumulative_return'].cummax()
         trade_df['drawdown'] = trade_df['cumulative_return'] / trade_df['cumulative_max'] - 1
+
+        trade_df['pl_adj'] = (trade_df['exit_price_adj'] - trade_df['entry_price_adj']) # * trade_df['quantity']
+        # trade_df['daily_return'] = trade_df['pl_adj']/trade_df['holding_period']
 
         # trade_df['quantity'] = (max_cap_per_trade // trade_df['stop_diff']).astype(int)
         # trade_df['max_affordable_qty'] = (initial_cap // trade_df['entry_price_adj']).astype(int)
@@ -144,6 +117,67 @@ def order_book_transformation(symbol, strategy_name,initial_cap, slippage_rate =
         # trade_df['order_cost'] = (trade_df['entry_price_adj'] * trade_df['quantity']) + trade_df['commission_cost']       
 
         return trade_df
+
+def daily_metrics(df, risk_free_rate):
+
+    start_date = df['date'].min()
+    symbol = df['symbol'].unique()[0]
+    log_mean_daily_return = df['daily_log_return'].dropna().mean()  
+    annual_return = log_mean_daily_return*250  
+    df['cumulative_log_return'] = df['daily_log_return'].cumsum()
+    df['cumulative_return'] = np.exp(df['cumulative_log_return'])
+    df['cumulative_max'] = df['cumulative_return'].cummax()
+    df['drawdown'] = df['cumulative_return']/df['cumulative_max'] - 1
+    max_drawdown = df['drawdown'].min()
+
+    std_dev_daily_return = df['daily_log_return'].dropna().std()
+    annual_std_dev = std_dev_daily_return * np.sqrt(250)
+
+    if annual_std_dev == 0 or np.isnan(annual_std_dev):
+        sharpe_ratio = np.nan
+    else:
+        sharpe_ratio = (annual_return - risk_free_rate)/annual_std_dev
+
+    total_trades = len(df)
+    win_rate = (len(df[df['daily_return'] > 0]))/total_trades if total_trades else np.nan
+
+    buy_and_hold_return= (df['close'].iloc[-1]) - (df[df['date'] == start_date]['close'].iloc[0])
+    buy_and_hold_return_pct = (buy_and_hold_return/(df[df['date'] == start_date]['close'].iloc[0]))*100
+
+    metric =  {
+        "symbol": symbol,
+        "log mean daily return": log_mean_daily_return,
+        "log annual return": annual_return,
+        "log std_dev_daily_return": std_dev_daily_return,
+        "log annual_std_dev": annual_std_dev,
+        "buy_and_hold_return": buy_and_hold_return,
+        "buy_and_hold_return_pct": buy_and_hold_return_pct,
+        "sharpe_ratio": sharpe_ratio,
+        "max_drawdown": max_drawdown,
+        "win_rate" : win_rate
+    }
+
+    metrics_df = pd.DataFrame([metric]) 
+    return metrics_df
+
+def all_daily_metrics(risk_free_rate):
+    
+    results_list = []
+    
+    symbols_df = fetch_symbols()
+    symbols_df = symbols_df['symbol'].unique()
+    for symbol in symbols_df: 
+        data_df = fetch_data(symbol)
+        if not data_df.empty:
+            results = daily_metrics(data_df, risk_free_rate)
+            results_list.append(results)
+
+        else:
+            print(f'{symbol} : error - no trades')
+        
+    final_df = pd.concat(results_list, ignore_index=True)
+    final_df = normalisation(final_df)
+    return final_df
 
 def order_book_metrics(trade_df,initial_cap, risk_free_rate = 0.07, confidence_level = 0.95):
 
@@ -278,7 +312,6 @@ def normalisation(df):
 
     df['score'] =  (0.5 * df['sharpe_norm']) + (0.3 * df['winrate_norm']) + (0.2 * (1 - df['drawdown_norm']))
     
-    df['symbol'] = df['symbol'].str[0]
     # all_orders_df=all_orders_df.merge(df[['symbol','score']], on='symbol', how='left')
 
     return df
