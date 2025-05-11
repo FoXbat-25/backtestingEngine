@@ -1,6 +1,13 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 from engine import *
 from meanReversion.app.mean_reversion import mean_reversion
+from dynamic_allocation import dynamic_allocation
 import pprint
+from engine2 import *
+from trade_book import trade_book2
 
 def main():
     nATR = 2.5 #Used to guage stop loss
@@ -12,12 +19,27 @@ def main():
     max_risk = 0.01
     risk_free_rate = 0.07
     confidence_level = 0.95
+    start_date = '2023-01-01'
+    slippage_rate = 0.001
     
-    # backTester(nATR, strategy_func=mean_reversion, strategy_name=strategy) # This inserts data into postgresql
-    # df = order_book_transformation(symbol, strategy)
-    # pd.set_option('display.max_columns', None)
-    metrics_df, all_orders_df  = all_orders_and_metrics(strategy, initial_capital)
-    print(all_orders_df)
+    backtest_obj = backTester(nATR, strategy_func=mean_reversion, strategy_name=strategy) # This inserts data into postgresql
+    df = backtest_obj.trades_df
+
+    df = slippage(df, slippage_rate)
+    metrics_df = get_daily_metrics(risk_free_rate)
+    df=df.merge(metrics_df[['symbol','score']], on='symbol', how='left')
+    event_df = get_indv_trades(df)
+    trade_log = dynamic_allocation(event_df, initial_capital, capital_exposure, max_risk, commission=commission)
+    print(trade_log)
+
+    # df = mean_reversion(start_from='2023-01-01')
+    # trades_df = trade_book2(nATR, df, strategy)
+    # print(trades_df)
+    # df.to_csv('~/Desktop/trades.csv')
+    # trade_log = dynamic_allocation(df, initial_capital, capital_exposure, max_risk, commission=commission)
+    # trade_log = trade_log.sort_values('date', ascending= True)
+    # print(trade_log)
+    # trade_log.to_csv('trade_log.csv')
     
     # df=df.merge(metrics_df[['symbol','score']], on='symbol', how='left')
     # event_df = indv_trade_listing(df)

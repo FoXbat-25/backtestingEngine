@@ -211,6 +211,72 @@ def all_orders_and_metrics(strategy, initial_capital):
     
     return final_df, all_orders_df
 
+def all_orders(strategy, slippage_rate , start_date):
+
+    query = """
+        SELECT * 
+            FROM TRADE_BOOK 
+            WHERE strategy = %(strategy_name)s 
+            and entry_date >= %(start_date)s and status = 'closed';
+    """
+    df = pd.read_sql(query, engine, params={ "strategy_name": strategy, "start_date":start_date}) 
+    df['entry_date'] = pd.to_datetime(df['entry_date'])
+    df = df.sort_values(by='entry_date', ascending= True)
+
+    df['entry_price_adj'] = df['entry_price'] * (1 + slippage_rate)
+    df['exit_price_adj'] = df['exit_price'] * (1 - slippage_rate)
+
+
+
+    return df
+
+def daily_returns(start_date, end_date, risk_free_rate):
+
+    query = """
+            SELECT f.SYMBOL, f.DATE, f.OPEN, f.HIGH, f.LOW, f.CLOSE, f.VOLUME
+            FROM NSEDATA_FACT f
+            INNER JOIN METADATA m ON f.SYMBOL = m.SYMBOL 
+            WHERE m.LISTING_DATE <= CURRENT_DATE - INTERVAL '65 days'
+            AND f.DATE BETWEEN %(start_date)s AND %(end_date)s;
+        """
+
+    dataframe = pd.read_sql(query, engine, params={"start_date": start_date, "end_date": end_date})
+
+    dataframe['date'] = pd.to_datetime(dataframe['date'])
+    dataframe = dataframe.sort_values(by=['symbol', 'date'], ascending=[True, True])
+
+    dataframe['prev_close'] = dataframe.groupby('symbol')['close'].shift(1)
+    dataframe['next_date'] = dataframe.groupby('symbol')['date'].shift(-1)
+    dataframe['prev_date'] = dataframe.groupby('symbol')['date'].shift(1)
+
+    dataframe['daily_return'] = dataframe['close'] - dataframe['prev_close']
+    dataframe['daily_log_return'] = np.log(dataframe['close']/dataframe['prev_close'])
+    dataframe['daily_return%'] = (dataframe['daily_return']/dataframe['prev_close'])
+
+    log_mean_daily_return = dataframe.groupby('symbol')['daily_log_return'].dropna().mean()
+    annual_return = log_mean_daily_return*250  
+    dataframe['cumulative_log_return'] = dataframe.groupby('symbol')['daily_log_return'].cumsum()
+    dataframe['cumulative_return'] = np.exp(['cumulative_log_return'])
+    dataframe['cumulative_max'] = dataframe.groupby('symbol')['cumulative_return'].cummax()
+    dataframe['drawdown'] = dataframe['cumulative_return']/dataframe['cumulative_max'] - 1
+    max_drawdown = dataframe.groupby('symbol')['drawdown'].min()
+
+    std_dev_daily_return = dataframe.groupby('symbol')['daily_log_return'].dropna().std()
+    annual_std_dev = std_dev_daily_return * np.sqrt(250)
+
+    if annual_std_dev == 0 or np.isnan(annual_std_dev):
+        sharpe_ratio = np.nan
+    else:
+        sharpe_ratio = (annual_return - risk_free_rate)/annual_std_dev
+
+    total_trades = len(dataframe)
+    win_rate = (len(dataframe[dataframe.groupby('symbol')['daily_return'] > 0]))/total_trades if total_trades else np.nan
+
+    buy_and_hold_return= (dataframe.groupby('symbol')['close'].iloc[-1]) - (dataframe[dataframe.groupby('symbol')['date'] == start_date]['close'].iloc[0])
+    buy_and_hold_return_pct = (buy_and_hold_return/(dataframe[dataframe.groupby('symbol')['date'] == start_date]['close'].iloc[0]))*100
+
+    return dataframe
+
 def indexes_metrics(first_trade_date, last_trade_date, symbol = "^NSEI"):
 
     indexes_query= """

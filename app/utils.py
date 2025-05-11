@@ -10,7 +10,7 @@ from sqlalchemy import create_engine
 from sklearn.preprocessing import MinMaxScaler
 
 from datetime import datetime
-from trade_book import trade_book
+from trade_book import trade_book2
 
 from config import SQL_ALCHEMY_CONN
 
@@ -18,17 +18,25 @@ engine = create_engine(SQL_ALCHEMY_CONN)
 
 class backTester:
 
-    def __init__(self, nATR, strategy_func, strategy_name):
+    def __init__(self, nATR, strategy_func, strategy_name, start_from='2023-01-01', adx_window=15,atr_window=14, z_score_window_list=[20], min_volume=500000, vol_window = 20, di_diff_window=20):
         self.strategy_func = strategy_func      
         self.strategy_name = strategy_name
-        self.nATR = nATR      
+        self.nATR = nATR
+        self.start_date = start_from
+        self.adx_window = adx_window
+        self.atr_window = atr_window
+        self.z_score_window_list = z_score_window_list
+        self.min_volume =  min_volume
+        self.vol_window = vol_window
+        self.di_diff_window = di_diff_window     
         self.populate_order_book()
 
 
     def populate_order_book(self):
-        df = self.strategy_func()
-        trade_book(self.nATR, df,strategy=self.strategy_name)
-
+        self.df = self.strategy_func(self.start_date, self.adx_window, self.atr_window, self.z_score_window_list, self.min_volume, self.vol_window, self.di_diff_window)
+        self.trades_df = trade_book2(self.nATR, self.df,strategy=self.strategy_name)
+        return self.trades_df
+    
 def fetch_symbols():
 
     query="""
