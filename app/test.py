@@ -2,12 +2,12 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-from engine import *
+from backtestingEngine.app.utils import *
 from meanReversion.app.mean_reversion import mean_reversion
 from dynamic_allocation import dynamic_allocation
 import pprint
-from engine2 import *
-from trade_book import trade_book2
+from backtestingEngine.app.engine import *
+from trade_book import trade_book
 
 def main():
     nATR = 2.5 #Used to guage stop loss
@@ -49,6 +49,12 @@ def main():
     # df = fetch_data(symbol)
     # daily_df = daily_metrics(df,risk_free_rate)
     # print(daily_df)
+
+    # metrics_df, all_orders_df  = all_orders_and_metrics(strategy, initial_capital)
+    # daily_metrics_df = all_daily_metrics(risk_free_rate)
+    # all_orders_df=all_orders_df.merge(daily_metrics_df[['symbol','score']], on='symbol', how='left')
+    # trade_log = dynamic_allocation(all_orders_df, initial_capital, capital_exposure, max_risk, commission=commission)
+    # trade_log = trade_log.sort_values('date', ascending= True)
 
     # final_df = all_daily_metrics(risk_free_rate)
     # print(final_df)

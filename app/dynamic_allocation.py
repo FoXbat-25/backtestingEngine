@@ -6,7 +6,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine
-from datetime import datetime, timedelta
 from utils import *
 
 from config import SQL_ALCHEMY_CONN

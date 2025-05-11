@@ -1,4 +1,4 @@
-from engine2 import *
+from backtestingEngine.app.engine import *
 from meanReversion.app.mean_reversion import mean_reversion
 from dynamic_allocation import dynamic_allocation
 from utils import *

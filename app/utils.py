@@ -10,7 +10,7 @@ from sqlalchemy import create_engine
 from sklearn.preprocessing import MinMaxScaler
 
 from datetime import datetime
-from trade_book import trade_book2
+from trade_book import trade_book
 
 from config import SQL_ALCHEMY_CONN
 
@@ -34,7 +34,7 @@ class backTester:
 
     def populate_order_book(self):
         self.df = self.strategy_func(self.start_date, self.adx_window, self.atr_window, self.z_score_window_list, self.min_volume, self.vol_window, self.di_diff_window)
-        self.trades_df = trade_book2(self.nATR, self.df,strategy=self.strategy_name)
+        self.trades_df = trade_book(self.nATR, self.df,strategy=self.strategy_name)
         return self.trades_df
     
 def fetch_symbols():
