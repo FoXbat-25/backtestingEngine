@@ -129,3 +129,35 @@ def get_indv_trades(df):
     event_df = pd.concat([buy_df, sell_df], ignore_index=True)
 
     return event_df
+
+def final_trades_metrics(trade_log, initial_capital):
+     
+    daily_summary = trade_log.groupby(['date', 'order_type'])['total_cost'].sum().unstack(fill_value=0)
+    daily_summary['daily_pnl'] = daily_summary.get('Sell', 0) - daily_summary.get('Buy', 0)
+    daily_summary['cumulative_pnl'] = daily_summary['daily_pnl'].cumsum()
+    daily_summary['balance'] = initial_capital + daily_summary['cumulative_pnl']
+    daily_summary['daily_return'] = daily_summary['balance'].pct_change().fillna(0)
+    total_days = (daily_summary.index[-1] - daily_summary.index[0]).days
+    cagr = (daily_summary['balance'].iloc[-1] / initial_capital) ** (365 / total_days) - 1
+    if daily_summary['daily_return'].std() == 0:
+        sharpe_ratio = 0
+    else:
+        sharpe_ratio = (daily_summary['daily_return'].mean() / daily_summary['daily_return'].std()) * np.sqrt(252)
+    cumulative_max = daily_summary['balance'].cummax()
+    drawdown = daily_summary['balance'] / cumulative_max - 1
+    max_drawdown = drawdown.min()
+    win_rate = (daily_summary['daily_pnl'] > 0).mean()
+    total_profit = daily_summary[daily_summary['daily_pnl'] > 0]['daily_pnl'].sum()
+    total_loss = -daily_summary[daily_summary['daily_pnl'] < 0]['daily_pnl'].sum()
+    profit_factor = total_profit / total_loss if total_loss != 0 else np.inf
+    
+    metrics = {
+    "CAGR": cagr,
+    "Sharpe Ratio": sharpe_ratio,
+    "Max Drawdown": max_drawdown,
+    "Win Rate": win_rate,
+    "Profit Factor": profit_factor,
+    "Final Balance": daily_summary['balance'].iloc[-1]
+    }
+
+    return metrics, daily_summary        

@@ -25,8 +25,11 @@ def main():
     event_df = get_indv_trades(df)
     # event_df.to_csv('event_df.csv')
     trade_log = dynamic_allocation(event_df, initial_capital, capital_exposure, max_risk, commission=commission)
-    print(trade_log)
+    metrics, daily_summary = final_trades_metrics(trade_log, initial_capital)
+    print(metrics)
+    print(daily_summary)
     # trade_log.to_csv('trade_log.csv')
+    daily_summary.to_csv('daily_summ.csv')
     
 if __name__ == "__main__":
     main()
