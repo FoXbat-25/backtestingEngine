@@ -48,11 +48,11 @@ def dynamic_allocation(df, strategy, initial_capital,capital_exposure,buffer_pct
                 continue
             quantity = min(max_affordable_quantity,risk_adj_quantity)
             commission_cost = quantity*price_adj*commission
-            total_cost =  (quantity * price_adj) + commission_cost
+            total_buy_cost =  (quantity * price_adj) + commission_cost
         
             if row['order_type'] == 'Buy':
-                if balance >= total_cost and quantity > 0 and balance > buffer:
-                    balance-=total_cost
+                if balance >= total_buy_cost and quantity > 0 and balance > buffer:
+                    balance-=total_buy_cost
                     holdings[symbol] = holdings.get(symbol, 0) + quantity
                     trade_log.append({
                         "symbol": symbol,
@@ -62,13 +62,14 @@ def dynamic_allocation(df, strategy, initial_capital,capital_exposure,buffer_pct
                         "order_type": 'Buy',
                         "quantity": quantity,
                         "commision_cost": commission_cost,
-                        "total_cost":total_cost,
+                        "total_cost":total_buy_cost,
                         "balance":balance
                     })
             elif row['order_type'] == 'Sell':
                 held_qty = holdings.get(symbol, 0)
                 if held_qty > 0:
                     quantity = held_qty
+                    commission_cost = quantity*price_adj*commission
                     holdings[symbol] = 0
                     sell_value = (quantity*price_adj) - commission_cost
                     balance += sell_value 
@@ -105,6 +106,9 @@ def trade_log_insertion(trade_log):
         for _, row in trade_log.iterrows()
     ]
     # Build the SQL INSERT query
+    
+    cursor.execute("TRUNCATE TABLE order_logs;")
+    
     insert_query = """
     INSERT INTO order_logs (symbol, date, strategy, price_adj, order_type, quantity, commision_cost, total_cost, balance)
     VALUES %s
