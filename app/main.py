@@ -1,6 +1,7 @@
 from engine import *
 from meanReversion.app.mean_reversion import mean_reversion
-from dynamic_allocation import dynamic_allocation
+from dynamic_allocation import dynamic_allocation, trade_log_insertion
+from utils import backTester
 from utils import *
 
 def main():
@@ -27,6 +28,9 @@ def main():
     # event_df.to_csv('event_df.csv')
     trade_log = dynamic_allocation(event_df,strategy, initial_capital, capital_exposure, buffer_pct, max_risk, commission=commission)
     print(trade_log)
+    trade_log_insertion(trade_log)
+    print('operations complete')
+
     # metrics, daily_summary = final_trades_metrics(trade_log, initial_capital)
     # print(metrics)
     # print(daily_summary)

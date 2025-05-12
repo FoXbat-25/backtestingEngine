@@ -8,7 +8,10 @@ import numpy as np
 from sqlalchemy import create_engine
 from utils import *
 
-from config import SQL_ALCHEMY_CONN
+import psycopg2
+from psycopg2.extras import execute_values
+
+from config import SQL_ALCHEMY_CONN, SQL_POSTGRES_CONN
 
 engine = create_engine(SQL_ALCHEMY_CONN)
 
@@ -84,10 +87,35 @@ def dynamic_allocation(df, strategy, initial_capital,capital_exposure,buffer_pct
 
 def trade_log_insertion(trade_log):
 
-    trade_log.to_sql(
-        name='order_log',      # PostgreSQL table name
-        con=engine,
-        if_exists='append',          # Append rows to existing table
-        index=False,                 # Do not insert DataFrame index
-        method='multi'               # Efficient batch insert
-)
+    conn = psycopg2.connect(SQL_POSTGRES_CONN)
+    cursor = conn.cursor()
+    
+    orders = [
+        (
+            row['symbol'],
+            row['date'].date() if isinstance(row['date'], pd.Timestamp) else row['date'],
+            row['strategy'],
+            float(row['price_adj']),
+            row['order_type'],
+            int(row['quantity']),
+            float(row['commision_cost']),
+            float(row['total_cost']),
+            float(row['balance'])
+        )
+        for _, row in trade_log.iterrows()
+    ]
+    # Build the SQL INSERT query
+    insert_query = """
+    INSERT INTO order_logs (symbol, date, strategy, price_adj, order_type, quantity, commision_cost, total_cost, balance)
+    VALUES %s
+    ON CONFLICT (symbol, date)
+    DO NOTHING
+    """
+
+    # Use execute_values for efficient batch insert
+    execute_values(cursor, insert_query, orders)
+
+    # Commit and close
+    conn.commit()
+    cursor.close()
+    conn.close()
