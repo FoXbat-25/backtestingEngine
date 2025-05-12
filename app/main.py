@@ -1,4 +1,4 @@
-from backtestingEngine.app.engine import *
+from engine import *
 from meanReversion.app.mean_reversion import mean_reversion
 from dynamic_allocation import dynamic_allocation
 from utils import *
@@ -23,8 +23,10 @@ def main():
     metrics_df = get_daily_metrics(risk_free_rate)
     df=df.merge(metrics_df[['symbol','score']], on='symbol', how='left')
     event_df = get_indv_trades(df)
+    # event_df.to_csv('event_df.csv')
     trade_log = dynamic_allocation(event_df, initial_capital, capital_exposure, max_risk, commission=commission)
     print(trade_log)
+    # trade_log.to_csv('trade_log.csv')
     
 if __name__ == "__main__":
     main()

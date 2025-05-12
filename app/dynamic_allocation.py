@@ -14,7 +14,7 @@ engine = create_engine(SQL_ALCHEMY_CONN)
 
 def dynamic_allocation(df, initial_capital,capital_exposure, max_risk, commission=0.0005):
     
-    dates_df = df['date'].unique()
+    dates_df = sorted(df['date'].unique())
     balance = initial_capital
     max_risk_per_trade = max_risk*balance
     trade_log=[]
@@ -47,7 +47,7 @@ def dynamic_allocation(df, initial_capital,capital_exposure, max_risk, commissio
             total_cost =  (quantity * price_adj) + commission_cost
         
             if row['order_type'] == 'Buy':
-                if balance >= total_cost:
+                if balance >= total_cost and quantity > 0:
                     balance-=total_cost
                     holdings[symbol] = holdings.get(symbol, 0) + quantity
                     trade_log.append({
