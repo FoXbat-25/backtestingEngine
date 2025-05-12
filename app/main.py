@@ -15,6 +15,7 @@ def main():
     confidence_level = 0.95
     start_date = '2023-01-01'
     slippage_rate = 0.001
+    buffer_pct = 0.25
     
     backtest_obj = backTester(nATR, strategy_func=mean_reversion, strategy_name=strategy, start_from=start_date)
     df = backtest_obj.trades_df
@@ -24,12 +25,13 @@ def main():
     df=df.merge(metrics_df[['symbol','score']], on='symbol', how='left')
     event_df = get_indv_trades(df)
     # event_df.to_csv('event_df.csv')
-    trade_log = dynamic_allocation(event_df, initial_capital, capital_exposure, max_risk, commission=commission)
-    metrics, daily_summary = final_trades_metrics(trade_log, initial_capital)
-    print(metrics)
-    print(daily_summary)
+    trade_log = dynamic_allocation(event_df,strategy, initial_capital, capital_exposure, buffer_pct, max_risk, commission=commission)
+    print(trade_log)
+    # metrics, daily_summary = final_trades_metrics(trade_log, initial_capital)
+    # print(metrics)
+    # print(daily_summary)
     # trade_log.to_csv('trade_log.csv')
-    daily_summary.to_csv('daily_summ.csv')
+    # daily_summary.to_csv('daily_summ.csv')
     
 if __name__ == "__main__":
     main()

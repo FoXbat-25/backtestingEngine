@@ -12,11 +12,12 @@ from config import SQL_ALCHEMY_CONN
 
 engine = create_engine(SQL_ALCHEMY_CONN)
 
-def dynamic_allocation(df, initial_capital,capital_exposure, max_risk, commission=0.0005):
+def dynamic_allocation(df, strategy, initial_capital,capital_exposure,buffer_pct, max_risk, commission=0.0005):
     
     dates_df = sorted(df['date'].unique())
     balance = initial_capital
     max_risk_per_trade = max_risk*balance
+    buffer = buffer_pct*initial_capital
     trade_log=[]
     holdings={}
     
@@ -47,12 +48,13 @@ def dynamic_allocation(df, initial_capital,capital_exposure, max_risk, commissio
             total_cost =  (quantity * price_adj) + commission_cost
         
             if row['order_type'] == 'Buy':
-                if balance >= total_cost and quantity > 0:
+                if balance >= total_cost and quantity > 0 and balance > buffer:
                     balance-=total_cost
                     holdings[symbol] = holdings.get(symbol, 0) + quantity
                     trade_log.append({
                         "symbol": symbol,
                         "date": date,
+                        "strategy": strategy,
                         "price_adj": price_adj,
                         "order_type": 'Buy',
                         "quantity": quantity,
@@ -70,6 +72,7 @@ def dynamic_allocation(df, initial_capital,capital_exposure, max_risk, commissio
                     trade_log.append({
                         "symbol": symbol,
                         "date": date,
+                        "strategy": strategy,
                         "price_adj": price_adj,
                         "order_type": 'Sell',
                         "quantity": quantity,
@@ -78,3 +81,13 @@ def dynamic_allocation(df, initial_capital,capital_exposure, max_risk, commissio
                         "balance":balance
                     })
     return pd.DataFrame(trade_log)
+
+def trade_log_insertion(trade_log):
+
+    trade_log.to_sql(
+        name='order_log',      # PostgreSQL table name
+        con=engine,
+        if_exists='append',          # Append rows to existing table
+        index=False,                 # Do not insert DataFrame index
+        method='multi'               # Efficient batch insert
+)
