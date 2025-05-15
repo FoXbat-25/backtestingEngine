@@ -33,6 +33,8 @@ def main():
     print(portfolio_df)
     results = get_portfolio_metrics(portfolio_df, initial_capital)
     print(results)
+    index_results = get_index_metrics(start_date)
+    print(index_results)
     
     print('operations complete')
 

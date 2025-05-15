@@ -163,7 +163,10 @@ def get_indv_trades(df):
 #     return metrics, daily_summary        
 
 def get_portfolio_metrics(df, initial_capital):
-    df['daily_returns'] = df['asset_valuation'].pct_change().fillna(0)
+    df['daily_return'] = df['asset_valuation'].pct_change().fillna(0)
+
+    df['date'] = pd.to_datetime(df['date'])
+    df = df.set_index('date')
 
     total_days = (df.index[-1] - df.index[0]).days
     cagr = (df['asset_valuation'].iloc[-1] / initial_capital) ** (365 / total_days) - 1 if total_days > 0 else 0
@@ -193,6 +196,39 @@ def get_portfolio_metrics(df, initial_capital):
         'Annual Volatility': round(volatility, 4),
         'Win Rate': round(win_rate, 4),
         'Profit Factor': round(profit_factor, 4),
-        'Final Portfolio Value': round(df['portfolio_value'].iloc[-1], 2)
+        'Final Portfolio Value': round(df['asset_valuation'].iloc[-1], 2)
     }
 
+def get_index_metrics(first_trade_date, symbol="^NSEI"):
+    indexes_query = """
+        SELECT * FROM INDEXES_FACT 
+        WHERE SYMBOL = %(symbol)s AND date >= %(start_date)s;
+    """
+    indexes_df = pd.read_sql(indexes_query, engine, params={
+        "symbol": symbol,
+        "start_date": first_trade_date
+    })
+    
+    if indexes_df.empty:
+        return {"error": "No index data found in the specified date range."}
+    
+    indexes_df['date'] = pd.to_datetime(indexes_df['date'])
+    indexes_df = indexes_df.sort_values(by='date')
+
+    start_price = indexes_df['close'].iloc[0]
+    end_price = indexes_df['close'].iloc[-1]
+    buy_and_hold_return = end_price - start_price
+    buy_and_hold_return_pct = (end_price / start_price - 1) * 100
+
+    total_days = (indexes_df['date'].iloc[-1] - indexes_df['date'].iloc[0]).days
+    cagr = (end_price / start_price) ** (365 / total_days) - 1 if total_days > 0 else 0
+
+    return {
+        "symbol": symbol,
+        "start_price": round(start_price, 2),
+        "end_price": round(end_price, 2),
+        "buy_and_hold_return": round(buy_and_hold_return, 2),
+        "return_pct": round(buy_and_hold_return_pct, 2),
+        "CAGR": round(cagr, 4),
+        "total_days": total_days
+    }
