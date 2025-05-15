@@ -130,34 +130,69 @@ def get_indv_trades(df):
 
     return event_df
 
-def final_trades_metrics(trade_log, initial_capital):
+# def final_trades_metrics(trade_log, initial_capital):
      
-    daily_summary = trade_log.groupby(['date', 'order_type'])['total_cost'].sum().unstack(fill_value=0)
-    daily_summary['daily_pnl'] = daily_summary.get('Sell', 0) - daily_summary.get('Buy', 0)
-    daily_summary['cumulative_pnl'] = daily_summary['daily_pnl'].cumsum()
-    daily_summary['balance'] = initial_capital + daily_summary['cumulative_pnl']
-    daily_summary['daily_return'] = daily_summary['balance'].pct_change().fillna(0)
-    total_days = (daily_summary.index[-1] - daily_summary.index[0]).days
-    cagr = (daily_summary['balance'].iloc[-1] / initial_capital) ** (365 / total_days) - 1
-    if daily_summary['daily_return'].std() == 0:
-        sharpe_ratio = 0
-    else:
-        sharpe_ratio = (daily_summary['daily_return'].mean() / daily_summary['daily_return'].std()) * np.sqrt(252)
-    cumulative_max = daily_summary['balance'].cummax()
-    drawdown = daily_summary['balance'] / cumulative_max - 1
-    max_drawdown = drawdown.min()
-    win_rate = (daily_summary['daily_pnl'] > 0).mean()
-    total_profit = daily_summary[daily_summary['daily_pnl'] > 0]['daily_pnl'].sum()
-    total_loss = -daily_summary[daily_summary['daily_pnl'] < 0]['daily_pnl'].sum()
-    profit_factor = total_profit / total_loss if total_loss != 0 else np.inf
+#     daily_summary = trade_log.groupby(['date', 'order_type'])['total_cost'].sum().unstack(fill_value=0)
+#     daily_summary['daily_pnl'] = daily_summary.get('Sell', 0) - daily_summary.get('Buy', 0)
+#     daily_summary['cumulative_pnl'] = daily_summary['daily_pnl'].cumsum()
+#     daily_summary['balance'] = initial_capital + daily_summary['cumulative_pnl']
+#     daily_summary['daily_return'] = daily_summary['balance'].pct_change().fillna(0)
+#     total_days = (daily_summary.index[-1] - daily_summary.index[0]).days
+#     cagr = (daily_summary['balance'].iloc[-1] / initial_capital) ** (365 / total_days) - 1
+#     if daily_summary['daily_return'].std() == 0:
+#         sharpe_ratio = 0
+#     else:
+#         sharpe_ratio = (daily_summary['daily_return'].mean() / daily_summary['daily_return'].std()) * np.sqrt(252)
+#     cumulative_max = daily_summary['balance'].cummax()
+#     drawdown = daily_summary['balance'] / cumulative_max - 1
+#     max_drawdown = drawdown.min()
+#     win_rate = (daily_summary['daily_pnl'] > 0).mean()
+#     total_profit = daily_summary[daily_summary['daily_pnl'] > 0]['daily_pnl'].sum()
+#     total_loss = -daily_summary[daily_summary['daily_pnl'] < 0]['daily_pnl'].sum()
+#     profit_factor = total_profit / total_loss if total_loss != 0 else np.inf
     
-    metrics = {
-    "CAGR": cagr,
-    "Sharpe Ratio": sharpe_ratio,
-    "Max Drawdown": max_drawdown,
-    "Win Rate": win_rate,
-    "Profit Factor": profit_factor,
-    "Final Balance": daily_summary['balance'].iloc[-1]
+#     metrics = {
+#     "CAGR": cagr,
+#     "Sharpe Ratio": sharpe_ratio,
+#     "Max Drawdown": max_drawdown,
+#     "Win Rate": win_rate,
+#     "Profit Factor": profit_factor,
+#     "Final Balance": daily_summary['balance'].iloc[-1]
+#     }
+
+#     return metrics, daily_summary        
+
+def get_portfolio_metrics(df, initial_capital):
+    df['daily_returns'] = df['asset_valuation'].pct_change().fillna(0)
+
+    total_days = (df.index[-1] - df.index[0]).days
+    cagr = (df['asset_valuation'].iloc[-1] / initial_capital) ** (365 / total_days) - 1 if total_days > 0 else 0
+
+    return_std = df['daily_return'].std()
+    return_mean = df['daily_return'].mean()
+    sharpe_ratio = (return_mean / return_std) * np.sqrt(252) if return_std != 0 else 0
+    cumulative_max = df['asset_valuation'].cummax()
+    drawdown = df['asset_valuation'] / cumulative_max - 1
+    max_drawdown = drawdown.min()
+
+    # Volatility (Annualized)
+    volatility = return_std * np.sqrt(252)
+
+    # Win Rate (days with positive return)
+    win_rate = (df['daily_return'] > 0).mean()
+
+    # Profit Factor (optional): based on daily gains/losses
+    gains = df[df['daily_return'] > 0]['daily_return'].sum()
+    losses = -df[df['daily_return'] < 0]['daily_return'].sum()
+    profit_factor = gains / losses if losses != 0 else np.inf
+
+    return {
+        'CAGR': round(cagr, 4),
+        'Sharpe Ratio': round(sharpe_ratio, 4),
+        'Max Drawdown': round(max_drawdown, 4),
+        'Annual Volatility': round(volatility, 4),
+        'Win Rate': round(win_rate, 4),
+        'Profit Factor': round(profit_factor, 4),
+        'Final Portfolio Value': round(df['portfolio_value'].iloc[-1], 2)
     }
 
-    return metrics, daily_summary        

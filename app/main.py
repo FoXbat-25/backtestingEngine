@@ -31,6 +31,8 @@ def main():
     trade_log_insertion(trade_log)
     portfolio_df = get_portfolio_log(initial_capital)
     print(portfolio_df)
+    results = get_portfolio_metrics(portfolio_df, initial_capital)
+    print(results)
     
     print('operations complete')
 
