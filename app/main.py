@@ -31,10 +31,12 @@ def main():
     trade_log_insertion(trade_log)
     portfolio_df = get_portfolio_log(initial_capital)
     print(portfolio_df)
+    french_fama_results = french_fama_three(portfolio_df)
     results = get_portfolio_metrics(portfolio_df, initial_capital)
     print(results)
-    index_results = get_index_metrics(start_date)
+    index_results = get_index_metrics(start_date, risk_free_rate)
     print(index_results)
+    print(f'French fama = {french_fama_results}')
     
     print('operations complete')
 

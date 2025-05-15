@@ -110,3 +110,18 @@ def indv_trade_listing(df):
     # event_df = event_df.merge(all_orders_df[['symbol', 'score']], on='symbol', how='left')
 
     return event_df
+
+def read_ff_factors():
+    
+    factors_df = pd.read_csv(
+    '../data/F-F_Research_Data_Factors_daily.CSV', skiprows=3,skipfooter=10,engine='python', index_col=0
+    )
+    factors_df.index = pd.to_datetime(factors_df.index, format="%Y%m%d")
+    factors_df = factors_df.rename(columns={
+        'Mkt-RF': 'mkt_excess',
+        'SMB': 'smb',
+        'HML': 'hml',
+        'RF': 'rf'
+    }) / 100 
+
+    return factors_df

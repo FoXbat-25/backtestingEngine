@@ -7,8 +7,10 @@ import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine
 from sklearn.preprocessing import MinMaxScaler
+import statsmodels.api as sm
+from utils import *
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from config import SQL_ALCHEMY_CONN
 
@@ -199,7 +201,7 @@ def get_portfolio_metrics(df, initial_capital):
         'Final Portfolio Value': round(df['asset_valuation'].iloc[-1], 2)
     }
 
-def get_index_metrics(first_trade_date, symbol="^NSEI"):
+def get_index_metrics(first_trade_date, risk_free_rate, symbol="^NSEI"):
     indexes_query = """
         SELECT * FROM INDEXES_FACT 
         WHERE SYMBOL = %(symbol)s AND date >= %(start_date)s;
@@ -215,12 +217,28 @@ def get_index_metrics(first_trade_date, symbol="^NSEI"):
     indexes_df['date'] = pd.to_datetime(indexes_df['date'])
     indexes_df = indexes_df.sort_values(by='date')
 
+    indexes_df['daily_log_return'] = np.log(indexes_df['close'] / indexes_df['close'].shift(1)).fillna(0)
+    log_mean_daily_return = indexes_df['daily_log_return'].mean()
+    std_dev_daily_return = indexes_df['daily_log_return'].std()
+    annual_return = log_mean_daily_return * 250
+    annual_std_dev = std_dev_daily_return * np.sqrt(250)
+
+    # Sharpe
+    sharpe_ratio = (annual_return - risk_free_rate) / annual_std_dev
+    sharpe_ratio = np.nan if np.isinf(sharpe_ratio) else sharpe_ratio
+
+    indexes_df['cumulative_log_return'] = indexes_df['daily_log_return'].cumsum()
+    indexes_df['cumulative_return'] = np.exp(indexes_df['cumulative_log_return'])
+    indexes_df['cumulative_max'] = indexes_df['cumulative_return'].cummax()
+    indexes_df['drawdown'] = indexes_df['cumulative_return'] / indexes_df['cumulative_max'] - 1
+    max_drawdown = indexes_df['drawdown'].min()
+
     start_price = indexes_df['close'].iloc[0]
     end_price = indexes_df['close'].iloc[-1]
     buy_and_hold_return = end_price - start_price
     buy_and_hold_return_pct = (end_price / start_price - 1) * 100
 
-    total_days = (indexes_df['date'].iloc[-1] - indexes_df['date'].iloc[0]).days
+    total_days = len(indexes_df)
     cagr = (end_price / start_price) ** (365 / total_days) - 1 if total_days > 0 else 0
 
     return {
@@ -230,5 +248,35 @@ def get_index_metrics(first_trade_date, symbol="^NSEI"):
         "buy_and_hold_return": round(buy_and_hold_return, 2),
         "return_pct": round(buy_and_hold_return_pct, 2),
         "CAGR": round(cagr, 4),
-        "total_days": total_days
+        "Sharpe Ratio": round(sharpe_ratio, 4),
+        "Max Drawdown": round(max_drawdown, 4),
+        "Annual Volatility": round(annual_std_dev, 4),
+        "Annual Log Return": round(annual_return, 4),
+        "Total Days": total_days
+    }
+
+def french_fama_three(df):
+    
+    factors_df = read_ff_factors()
+    df['date'] = pd.to_datetime(df['date'])
+    df['daily_return'] = df['asset_valuation'].pct_change().fillna(0)
+    # Join Fama-French factors
+    df = df.reset_index()  # if 'date' was index
+    merged_df = pd.merge(df, factors_df, left_on='date', right_index=True)
+    merged_df['excess_portfolio_return'] = merged_df['daily_return'] - merged_df['rf']
+
+    X = merged_df[['mkt_excess', 'smb', 'hml']]
+    X = sm.add_constant(X)
+    y = merged_df['excess_portfolio_return']
+
+    model = sm.OLS(y, X).fit()
+
+    return {
+        'alpha': model.params['const'],
+        'mkt_beta': model.params['mkt_excess'],
+        'smb_beta': model.params['smb'],
+        'hml_beta': model.params['hml'],
+        'r_squared': model.rsquared,
+        'p_values': model.pvalues.to_dict(),
+        'summary': model.summary().as_text()
     }
