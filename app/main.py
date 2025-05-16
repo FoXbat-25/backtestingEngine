@@ -20,17 +20,17 @@ def main():
     
     backtest_obj = backTester(nATR, strategy_func=mean_reversion, strategy_name=strategy, start_from=start_date)
     df = backtest_obj.trades_df
-
+    
     df = slippage(df, slippage_rate)
     metrics_df = get_daily_metrics(risk_free_rate)
     df=df.merge(metrics_df[['symbol','score']], on='symbol', how='left')
     event_df = get_indv_trades(df)
     # event_df.to_csv('event_df.csv')
     trade_log = dynamic_allocation(event_df,strategy, initial_capital, capital_exposure, buffer_pct, max_risk, commission=commission)
-    print(trade_log)
+    # print(trade_log)
     trade_log_insertion(trade_log)
     portfolio_df = get_portfolio_log(initial_capital)
-    print(portfolio_df)
+    # print(portfolio_df)
     french_fama_results = french_fama_three(portfolio_df)
     results = get_portfolio_metrics(portfolio_df, initial_capital)
     print(results)
