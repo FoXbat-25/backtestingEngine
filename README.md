@@ -109,3 +109,7 @@ Sample results:
 		R²: 0.00377
 
 
+Author:
+
+Dhruv Khatri
+dhruvkhatri9275@gmail.com

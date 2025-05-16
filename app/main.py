@@ -7,13 +7,13 @@ from utils import *
 def main():
     nATR = 2.5 #Used to guage stop loss
     strategy = "MeanReversion"
-    symbol = "ICICIBANK"
+    # symbol = "ICICIBANK"
     initial_capital = 1000000
     capital_exposure = 0.4
     commission = 0.0005
     max_risk = 0.01
     risk_free_rate = 0.07
-    confidence_level = 0.95
+    # confidence_level = 0.95
     start_date = '2023-01-01'
     slippage_rate = 0.001
     buffer_pct = 0.25
