@@ -39,18 +39,6 @@ def main():
     print(f'French fama = {french_fama_results}')
     
     print('operations complete')
-
-    # metrics, daily_summary = final_trades_metrics(trade_log, initial_capital)
-    # print(metrics)
-    # print(daily_summary)
-    # trade_log.to_csv('trade_log.csv')
-    # daily_summary.to_csv('daily_summ.csv')
     
 if __name__ == "__main__":
     main()
-
-
-
-# df = order_book_transformation(symbol, strategy, initial_capital)
-    # print(all_orders_df)
-    # pd.set_option('display.max_columns', None)
