@@ -180,6 +180,9 @@ def get_portfolio_metrics(df, initial_capital):
     drawdown = df['asset_valuation'] / cumulative_max - 1
     max_drawdown = drawdown.min()
 
+    confidence_level = 0.95
+    VaR_1d = -np.percentile(df['daily_return'], (1 - confidence_level) * 100)
+
     # Volatility (Annualized)
     volatility = return_std * np.sqrt(252)
 
@@ -196,6 +199,7 @@ def get_portfolio_metrics(df, initial_capital):
         'Sharpe Ratio': round(sharpe_ratio, 4),
         'Max Drawdown': round(max_drawdown, 4),
         'Annual Volatility': round(volatility, 4),
+        'Var_1d': round(VaR_1d, 2),
         'Win Rate': round(win_rate, 4),
         'Profit Factor': round(profit_factor, 4),
         'Final Portfolio Value': round(df['asset_valuation'].iloc[-1], 2)
