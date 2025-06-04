@@ -3,6 +3,7 @@ from meanReversion.app.mean_reversion import mean_reversion
 from dynamic_allocation import dynamic_allocation, trade_log_insertion, get_portfolio_log
 from utils import backTester
 from utils import *
+import matplotlib.pyplot as plt
 
 def main():
     nATR = 2.5 #Used to guage stop loss
@@ -30,14 +31,14 @@ def main():
     # print(trade_log)
     trade_log_insertion(trade_log)
     portfolio_df = get_portfolio_log(initial_capital)
-    # print(portfolio_df)
+    portfolio_df.to_csv('portfolio.csv')
     french_fama_results = french_fama_three(portfolio_df)
     results = get_portfolio_metrics(portfolio_df, initial_capital)
     print(results)
     index_results = get_index_metrics(start_date, risk_free_rate)
     print(index_results)
     print(f'French fama = {french_fama_results}')
-    
+    # plt.plot(portfolio_df['date'], portfolio_df['asset_valuation'] )
     print('operations complete')
     
 if __name__ == "__main__":
