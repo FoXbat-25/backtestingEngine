@@ -18,7 +18,7 @@ engine = create_engine(SQL_ALCHEMY_CONN)
 
 class backTester:
 
-    def __init__(self, nATR, strategy_func, strategy_name, start_from='2023-01-01', adx_window=15,atr_window=14, z_score_window_list=[20], min_volume=500000, vol_window = 20, di_diff_window=20):
+    def __init__(self, nATR, strategy_func, strategy_name, start_from='2020-01-01', adx_window=15,atr_window=14, z_score_window_list=[20], min_volume=5000000, vol_window = 20, di_diff_window=20):
         self.strategy_func = strategy_func      
         self.strategy_name = strategy_name
         self.nATR = nATR
@@ -46,7 +46,7 @@ def fetch_symbols():
     df = df.sort_values(by=['symbol'], ascending=[True])
     return df
 
-def fetch_data(symbol, start_date='2023-01-01', end_date = datetime.today().date()):
+def fetch_data(symbol, start_date='2020-01-01', end_date = datetime.today().date()):
 
     query = """
             SELECT f.SYMBOL, f.DATE, f.OPEN, f.HIGH, f.LOW, f.CLOSE, f.VOLUME

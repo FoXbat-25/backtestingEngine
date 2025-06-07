@@ -171,7 +171,7 @@ def get_portfolio_log(initial_capital):
         ),
         date_range AS (
             SELECT DISTINCT date
-            FROM nsedata_fact WHERE date >= '2023-01-01'
+            FROM nsedata_fact WHERE date >= '2020-01-01'
         ),
         holding_days AS (
             SELECT

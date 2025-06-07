@@ -16,7 +16,7 @@ from config import SQL_ALCHEMY_CONN
 
 engine = create_engine(SQL_ALCHEMY_CONN)
 
-def get_data(start_date='2023-01-01', end_date = datetime.today().date()):
+def get_data(start_date='2020-01-01', end_date = datetime.today().date()):
 
     query = """
             SELECT f.SYMBOL, f.DATE, f.OPEN, f.HIGH, f.LOW, f.CLOSE, f.VOLUME

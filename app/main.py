@@ -15,7 +15,7 @@ def main():
     max_risk = 0.01
     risk_free_rate = 0.07
     # confidence_level = 0.95
-    start_date = '2023-01-01'
+    start_date = '2020-01-01'
     slippage_rate = 0.001
     buffer_pct = 0.25
     
